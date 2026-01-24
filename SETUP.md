@@ -164,6 +164,19 @@ nohup python bot.py > kodak.log 2>&1 &
 
 Press `Ctrl+C` in the terminal where it's running.
 
+## Rate Limiting
+
+By default, each user can send **15 messages per hour**. This prevents runaway API costs.
+
+To change the limit, edit `.env`:
+```
+RATE_LIMIT_PER_HOUR=30
+```
+
+Set to `0` for unlimited (if you trust your users or it's just you).
+
+**Cost math:** At ~$0.02/message, 15 msgs/hour = $0.30/hour max per user.
+
 ## Updating Kodak
 
 If you used Git:

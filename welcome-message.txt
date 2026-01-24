@@ -17,7 +17,7 @@ Kodak is designed to be warm but honest — it'll ask real questions and point o
 • `/clear` — Delete everything
 
 **Heads up:**
-• Each message costs real money (API fees), so have good conversations but don't spam 😅
+• 15 messages per hour limit (API costs add up!)
 • Data may reset occasionally (server restarts). Use `/export` to save your beliefs.
 
 **Want persistent data?** Run your own instance locally — your data never leaves your machine:
