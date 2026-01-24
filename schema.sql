@@ -79,6 +79,51 @@ CREATE TABLE IF NOT EXISTS conversations (
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
+-- Comparison requests between users
+CREATE TABLE IF NOT EXISTS comparison_requests (
+    id TEXT PRIMARY KEY,
+    requester_id TEXT NOT NULL,           -- User who initiated
+    target_id TEXT NOT NULL,              -- User being asked
+    status TEXT DEFAULT 'pending',        -- pending | accepted | declined | expired
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    responded_at TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(user_id),
+    FOREIGN KEY (target_id) REFERENCES users(user_id)
+);
+
+-- User privacy preferences
+CREATE TABLE IF NOT EXISTS user_privacy (
+    user_id TEXT PRIMARY KEY,
+    default_visibility TEXT DEFAULT 'shareable',  -- Default for new beliefs
+    allow_comparison_requests INTEGER DEFAULT 1,  -- Can others request comparisons?
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Store comparison results for bridging score calculation
+CREATE TABLE IF NOT EXISTS comparison_results (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    user_a_id TEXT NOT NULL,
+    user_b_id TEXT NOT NULL,
+    overall_similarity REAL,
+    core_similarity REAL,
+    agreement_count INTEGER DEFAULT 0,
+    difference_count INTEGER DEFAULT 0,
+    computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (request_id) REFERENCES comparison_requests(id)
+);
+
+-- Track which beliefs bridged a comparison (agreements despite low overall similarity)
+CREATE TABLE IF NOT EXISTS bridging_beliefs (
+    id TEXT PRIMARY KEY,
+    comparison_id TEXT NOT NULL,
+    belief_id TEXT NOT NULL,
+    matched_with_belief_id TEXT,           -- The other user's similar belief
+    user_id TEXT NOT NULL,                 -- Owner of this belief
+    FOREIGN KEY (comparison_id) REFERENCES comparison_results(id),
+    FOREIGN KEY (belief_id) REFERENCES beliefs(id)
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_beliefs_user ON beliefs(user_id);
 CREATE INDEX IF NOT EXISTS idx_beliefs_user_active ON beliefs(user_id, is_deleted);

@@ -8,8 +8,10 @@ Kodak has natural, curious conversations with you—and along the way, builds a 
 
 - **Extracts beliefs** from natural conversation (you don't have to do anything special)
 - **Tracks confidence levels** based on how certain you sound
+- **Lets you mark importance** — distinguish core beliefs from passing thoughts
 - **Finds connections** between your beliefs over time
 - **Lets you explore** your belief map with `/map` and `/explore [topic]`
+- **Lets you share** — create snapshots of your beliefs to discuss with others
 - **Respects privacy** — all data is per-user, you can pause, export, or delete anytime
 
 ## Reading Your Belief Map
@@ -25,6 +27,20 @@ Each belief shows a confidence level based on how certain you sounded:
 [●●○○○]  40% — Tentative ("maybe...", "I'm not sure but...")
 [●○○○○]  20% — Uncertain ("I guess...", implied beliefs)
 ```
+
+### Importance Indicators
+
+Mark how important each belief is to you with `/mark`:
+
+```
+★★★★★ Core (5)       — Foundational to who you are
+★★★★☆ High (4)       — Very important, rarely changes
+★★★☆☆ Medium (3)     — Significant but flexible (default)
+★★☆☆☆ Low (2)        — Opinions you hold loosely
+★☆☆☆☆ Peripheral (1) — Passing thoughts, trivia
+```
+
+Use `/core` to see only your most important beliefs (★★★★+).
 
 ### The Map View
 
@@ -46,14 +62,26 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 | `/help` | See all commands |
 | `/map` | View your belief map |
 | `/explore [topic]` | Dive into beliefs about a topic |
-| `/beliefs` | Raw list with IDs |
+| `/beliefs` | Raw list with IDs and importance |
 | `/belief [id]` | View one belief with its connections |
+| `/core` | Show only important beliefs (★★★★+) |
+| `/tensions` | Show beliefs that might contradict each other |
+| `/history [id]` | See how a belief has evolved over time |
+| `/changes` | See beliefs that changed recently |
+| `/mark [id] [1-5]` | Set how important a belief is |
+| `/confidence [id] [1-5]` | Update how certain you are in a belief |
+| `/share` | Create shareable snapshot of your beliefs |
+| `/share-export` | Export shareable beliefs as file |
+| `/compare-file` | Compare with someone's exported file |
+| `/bridging` | See your bridging score |
+| `/privacy` | Control which beliefs are shareable |
 | `/setup` | Choose a personality preset |
 | `/style` | Fine-tune personality (warmth, directness, playfulness, formality) |
 | `/forget [id]` | Delete a belief (use `last` for most recent) |
 | `/pause` | Pause belief tracking |
 | `/resume` | Resume tracking |
 | `/export` | Download all your data as JSON |
+| `/backup` | Download database backup file |
 | `/clear` | Delete everything |
 
 ## Personality Presets
@@ -103,9 +131,9 @@ cp .env.example .env
 cd src && python bot.py
 ```
 
-**[Full setup guide with screenshots →](SETUP.md)**
+**[Full setup guide →](SETUP.md)**
 
-The guide covers Discord bot creation, API keys, Windows/Mac/Linux, and troubleshooting.
+Step-by-step instructions for Discord bot creation, API keys, Windows/Mac/Linux, and troubleshooting.
 
 ## Cost
 
@@ -120,6 +148,15 @@ Each message costs ~$0.01-0.02 (Anthropic API). A good conversation session migh
 - `/clear` to delete everything
 
 Your beliefs never leave your machine.
+
+## Coming Soon
+
+- **Compatibility matching** — Find people with similar beliefs, or productive disagreements
+- **Web visualization** — Explore your belief map as an interactive graph
+- **Obsidian/Roam export** — Take your belief network into your notes app
+- **Scheduled check-ins** — "How do you feel about X now?" over time
+
+See the full [roadmap](DESIGN.md#roadmap).
 
 ## License
 

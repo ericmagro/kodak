@@ -226,6 +226,121 @@ Only include meaningful, clear relationships. Empty array is fine if none found.
         return []
 
 
+async def calculate_belief_similarity(beliefs_a: list[dict], beliefs_b: list[dict]) -> dict:
+    """
+    Calculate similarity between two users' belief sets.
+    Uses Claude to find semantic matches and calculate agreement.
+    """
+    if not beliefs_a or not beliefs_b:
+        return {
+            "overall_similarity": 0,
+            "core_similarity": 0,
+            "agreements": [],
+            "differences": [],
+            "unique_a": beliefs_a,
+            "unique_b": beliefs_b
+        }
+
+    # Format beliefs for comparison
+    beliefs_a_text = "\n".join([
+        f"[A{i}] (importance:{b.get('importance', 3)}) {b['statement']}"
+        for i, b in enumerate(beliefs_a[:25])
+    ])
+    beliefs_b_text = "\n".join([
+        f"[B{i}] (importance:{b.get('importance', 3)}) {b['statement']}"
+        for i, b in enumerate(beliefs_b[:25])
+    ])
+
+    prompt = f"""Compare these two sets of beliefs and find:
+1. Agreements (similar or compatible beliefs)
+2. Differences (contradictory or opposing beliefs)
+3. Unique beliefs (held by one person, no match in the other)
+
+USER A's beliefs:
+{beliefs_a_text}
+
+USER B's beliefs:
+{beliefs_b_text}
+
+For each match, consider:
+- Semantic similarity (do they mean the same thing?)
+- Importance weighting (core beliefs matter more)
+
+Return valid JSON only:
+{{
+  "agreements": [
+    {{"a_index": 0, "b_index": 2, "similarity": 0.9, "note": "Both value honesty"}}
+  ],
+  "differences": [
+    {{"a_index": 1, "b_index": 3, "note": "Opposing views on X"}}
+  ],
+  "overall_similarity": 0.0-1.0,
+  "core_similarity": 0.0-1.0,
+  "summary": "One sentence summary of compatibility"
+}}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        content = response.content[0].text
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        content = content.strip()
+
+        result = json.loads(content)
+
+        # Enrich with actual belief data
+        enriched_agreements = []
+        for ag in result.get("agreements", []):
+            a_idx = ag.get("a_index", 0)
+            b_idx = ag.get("b_index", 0)
+            if a_idx < len(beliefs_a) and b_idx < len(beliefs_b):
+                enriched_agreements.append({
+                    "belief_a": beliefs_a[a_idx],
+                    "belief_b": beliefs_b[b_idx],
+                    "similarity": ag.get("similarity", 0.7),
+                    "note": ag.get("note", "")
+                })
+
+        enriched_differences = []
+        for df in result.get("differences", []):
+            a_idx = df.get("a_index", 0)
+            b_idx = df.get("b_index", 0)
+            if a_idx < len(beliefs_a) and b_idx < len(beliefs_b):
+                enriched_differences.append({
+                    "belief_a": beliefs_a[a_idx],
+                    "belief_b": beliefs_b[b_idx],
+                    "note": df.get("note", "")
+                })
+
+        return {
+            "overall_similarity": result.get("overall_similarity", 0.5),
+            "core_similarity": result.get("core_similarity", 0.5),
+            "agreements": enriched_agreements,
+            "differences": enriched_differences,
+            "summary": result.get("summary", ""),
+            "unique_a": [],  # TODO: calculate unmatched
+            "unique_b": []
+        }
+
+    except (json.JSONDecodeError, anthropic.APIError) as e:
+        return {
+            "overall_similarity": 0,
+            "core_similarity": 0,
+            "agreements": [],
+            "differences": [],
+            "summary": f"Couldn't calculate similarity: {e}",
+            "unique_a": [],
+            "unique_b": []
+        }
+
+
 async def summarize_beliefs(beliefs: list[dict], topic: str = None) -> str:
     """
     Generate a natural language summary of beliefs.

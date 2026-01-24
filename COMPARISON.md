@@ -22,7 +22,7 @@ This is NOT about:
 
 Before users can meaningfully compare beliefs, they need to understand their own.
 
-### 1.1 Belief Importance Marking
+### 1.1 Belief Importance Marking ✅ IMPLEMENTED
 
 **Why this matters:**
 Not all beliefs are equal. "I prefer tea over coffee" and "Human life has inherent value" are both beliefs, but they matter differently. Without importance marking:
@@ -86,7 +86,7 @@ User always has final say.
 
 ---
 
-### 1.2 Belief Evolution Tracking
+### 1.2 Belief Evolution Tracking ✅ IMPLEMENTED
 
 **Why this matters:**
 Beliefs aren't static. Tracking how they change reveals:
@@ -151,7 +151,7 @@ When new belief extracted, check against existing:
 
 ---
 
-### 1.3 Relation Display Enhancement
+### 1.3 Relation Display Enhancement ✅ IMPLEMENTED
 
 **Why this matters:**
 Beliefs don't exist in isolation. Understanding connections reveals:
@@ -214,7 +214,7 @@ Kodak: Belief tree for #7:
 
 ---
 
-### 1.4 Shareable Export Format
+### 1.4 Shareable Export Format ✅ IMPLEMENTED
 
 **Why this matters:**
 Before building comparison features, let users share manually in Discord. This:
@@ -264,7 +264,7 @@ Kodak: Here's your shareable belief snapshot:
 
 ## Part 2: Belief Comparison (Core Feature)
 
-### 2.1 One-on-One Comparison
+### 2.1 One-on-One Comparison ✅ IMPLEMENTED
 
 **Why this matters:**
 The core value proposition — see how your beliefs relate to someone else's. Useful for:
@@ -408,7 +408,7 @@ def calculate_similarity(user_a, user_b):
 
 ---
 
-### 2.2 Similarity Score Components
+### 2.2 Similarity Score Components ✅ IMPLEMENTED
 
 **Why multiple components matter:**
 A single percentage is reductive. Breaking it down reveals:
@@ -449,7 +449,7 @@ You're likely to have good debates that go somewhere.
 
 ---
 
-### 2.3 Bridging Score
+### 2.3 Bridging Score ✅ IMPLEMENTED
 
 **Why this matters:**
 Inspired by Twitter Community Notes — the most valuable people aren't those who agree with their tribe, but those who can appreciate ideas across divides.
@@ -511,7 +511,7 @@ High bridging scores could:
 
 ## Part 3: Community Features
 
-### 3.1 Tiered Privacy System
+### 3.1 Tiered Privacy System ✅ IMPLEMENTED
 
 **Why this matters:**
 People won't share beliefs honestly if they fear exposure. Privacy must be granular and user-controlled.
@@ -804,35 +804,36 @@ CREATE TABLE user_clusters (
 
 ### Phase 1: Foundation (v0.2)
 ```
-Week 1-2: Belief Importance
-├─ /mark command
-├─ Importance display in /beliefs, /map
-├─ Update schema
-└─ Prompt users to mark importance occasionally
+Week 1-2: Belief Importance ✅ DONE
+├─ /mark command ✅
+├─ /core command ✅
+├─ Importance display in /beliefs ✅
+├─ Update schema (importance column) ✅
+└─ Stars (★) visual indicator ✅
 
-Week 3-4: Better Relations
-├─ Enhanced /belief [id] display
-├─ /tree visualization
-├─ /tensions command
-└─ Improve relation extraction in Claude prompts
+Week 3-4: Better Relations ✅ DONE
+├─ Enhanced /belief [id] display ✅
+├─ /tensions command ✅
+├─ Grouped relation display (foundations, supports, tensions) ✅
+└─ /tree visualization (deferred to later)
 
-Week 5-6: Shareable Format
-├─ /share command with options
-├─ Clean embed format
-├─ Copy-as-text option
-└─ Privacy checks before sharing
+Week 5-6: Shareable Format ✅ DONE
+├─ /share command with options ✅
+├─ Clean embed format ✅
+├─ Copy-as-text option ✅
+└─ Topic and core_only filters ✅
 ```
 
 ### Phase 2: Comparison Core (v0.3)
 ```
-Week 7-9: 1:1 Comparison
-├─ /compare request/accept flow
-├─ Similarity calculation algorithm
-├─ Comparison result display
-├─ Privacy controls integration
+Week 7-9: 1:1 Comparison ✅ DONE
+├─ /compare request/accept flow ✅
+├─ Similarity calculation algorithm ✅
+├─ Comparison result display ✅
+├─ /requests command ✅
 
-Week 10-11: Scores & Display
-├─ Component breakdown (core, surface, style)
+Week 10-11: Scores & Display (PARTIAL)
+├─ Overall and core similarity scores ✅
 ├─ Bridging score calculation
 ├─ Score explanations
 └─ "Explore differences" drill-down

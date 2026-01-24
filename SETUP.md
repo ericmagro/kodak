@@ -46,7 +46,9 @@ sudo apt update && sudo apt install python3 python3-pip python3-venv
    - Read Message History
    - Use Slash Commands
 9. Copy the generated URL at the bottom
-10. Open that URL in your browser → Select your server → Authorize
+10. Open that URL in your browser → Select a server → Authorize
+
+**Don't have a server?** Create one in Discord: click the **+** button in your server list → "Create My Own" → "For me and my friends". Name it anything. This is just to let you DM the bot.
 
 Your bot is now in your server (but offline until you run the code).
 
@@ -145,7 +147,16 @@ Syncing commands...
 Ready!
 ```
 
-Your bot is now online! DM it on Discord to start chatting.
+Your bot is now online!
+
+## Step 7: Start Chatting
+
+1. Open Discord and go to the server where you invited your bot
+2. Find the bot in the member list (right sidebar) — it should show as online
+3. Click on the bot's name → Click **"Message"**
+4. This opens a DM — just say hi!
+
+The bot will guide you through a quick setup, then you can start chatting. Your conversations and beliefs are stored locally in `kodak.db` on your computer.
 
 ## Keeping It Running
 
@@ -176,6 +187,16 @@ RATE_LIMIT_PER_HOUR=15
 This limits each user to 15 messages per hour. Useful if you're hosting for others.
 
 **Cost math:** At ~$0.02/message, 15 msgs/hour = $0.30/hour max per user.
+
+## Custom Database Location (Optional)
+
+By default, the database is stored as `kodak.db` in the project folder. To use a different location:
+
+```
+KODAK_DB_PATH=/path/to/your/kodak.db
+```
+
+Useful if you want to store data on a different drive or a persistent volume.
 
 ## Updating Kodak
 

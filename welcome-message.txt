@@ -11,10 +11,18 @@ Kodak is designed to be warm but honest — it'll ask real questions and point o
 
 **Commands:**
 • `/map` — See your belief map
-• `/beliefs` — Raw list of everything captured
+• `/beliefs` — Raw list with importance (★) and confidence (●)
+• `/mark [id] [1-5]` — Set how important a belief is
+• `/core` — Show only your most important beliefs
+• `/share` — Create shareable snapshot to post in channels
 • `/pause` — Stop tracking (keep chatting)
 • `/export` — Download your data
-• `/clear` — Delete everything
+• `/help` — See all commands (there are more!)
+
+**Coming soon:**
+• Compatibility matching — find people with similar (or interestingly different) beliefs
+• Web visualization — explore your belief map visually
+• Obsidian/Roam export — take your beliefs into your notes app
 
 **Heads up:**
 • 15 messages per hour limit (API costs add up!)

@@ -286,10 +286,25 @@ UserPersonality {
 - `/style` — fine-tune personality dimensions (1-5 scales)
 - `/map` — see belief map with ASCII visualization
 - `/explore [topic]` — dive into beliefs about a topic
-- `/beliefs` — raw list with IDs and confidence
+- `/beliefs` — raw list with IDs, confidence, and importance
+- `/belief [id]` — view single belief with connections
+- `/core` — show only important beliefs (★★★★+)
+- `/tensions` — show beliefs that contradict each other
+- `/history [id]` — see how a belief has evolved over time
+- `/changes [days]` — see beliefs that changed recently
+- `/mark [id] [1-5]` — set belief importance level
+- `/confidence [id] [1-5]` — update confidence and record evolution
+- `/share [topic] [core_only]` — create shareable belief snapshot
+- `/compare @user` — request belief comparison with another user
+- `/requests` — see pending comparison requests
+- `/bridging` — see bridging score and bridging beliefs
+- `/privacy` — view/change belief visibility settings
+- `/share-export` — export shareable beliefs as JSON file
+- `/compare-file` — compare with someone's exported file
 - `/forget [id]` — delete a belief (supports "last")
 - `/pause` / `/resume` — toggle belief tracking
 - `/export` — download all data as JSON
+- `/backup` — download database backup file
 - `/clear` — delete everything (with confirmation)
 
 ---
@@ -306,18 +321,21 @@ UserPersonality {
 - [x] Rate limiting (configurable)
 - [x] Self-hosting guide
 
-### Now (v0.2 - Belief Understanding)
-- [ ] **Belief importance marking** — Let users mark beliefs 1-5 importance
-- [ ] **Belief evolution tracking** — How beliefs change over time
-- [ ] **Better relation display** — Show WHY beliefs connect
-- [ ] **Shareable export format** — Clean format for sharing in Discord
+### Now (v0.2 - Belief Understanding) ✅ COMPLETE
+- [x] **Belief importance marking** — `/mark [id] [1-5]` and `/core` commands
+- [x] **Belief evolution tracking** — `/history [id]` and `/changes` commands
+- [x] **Better relation display** — Enhanced `/belief [id]` with grouped relations, `/tensions` command
+- [x] **Shareable export format** — `/share` with topic and core_only options
 
-### Next (v0.3 - Comparison & Community)
-- [ ] **1:1 Belief comparison** — Compare your map with another user (opt-in)
-- [ ] **Similarity score** — Weighted by importance (OkCupid-style)
-- [ ] **Bridging score** — How often do you agree with people who usually disagree?
-- [ ] **Tiered privacy** — Public / connections-only / mutual consent / hidden
-- [ ] **Consensus finder** — Surface beliefs that bridge different clusters
+### Now (v0.3 - Comparison & Community) ✅ COMPLETE
+- [x] **1:1 Belief comparison** — `/compare @user` with request/accept flow
+- [x] **Similarity score** — Overall and core similarity percentages
+- [x] **Bridging score** — `/bridging` command shows cross-divide agreement
+- [x] **Tiered privacy** — `/privacy` command, visibility levels on beliefs
+- [x] **File-based comparison** — `/share-export` + `/compare-file` for self-hosters
+
+### Deferred
+- [ ] **Consensus finder** — Surface beliefs that bridge different clusters (needs active community)
 
 ### Later (v0.4+ - Advanced Features)
 - [ ] **Compatibility algorithm** — Multi-factor matching (semantic + structural + importance-weighted)
@@ -332,6 +350,14 @@ UserPersonality {
 - [ ] Scheduled check-ins ("How do you feel about X now?")
 - [ ] Steelmanned opposing beliefs ("Here's the best case for the other side")
 - [ ] Voice channel support?
+
+### Technical Debt / Improvements (from v0.3 audit)
+- [ ] **Belief deduplication** — Currently only checks last 30 beliefs; users with 100+ may get duplicates
+- [ ] **Auto-detect contradictions** — Trigger belief evolution when new statement contradicts existing belief
+- [ ] **In-place belief editing** — Allow updating a belief statement without delete/re-add
+- [ ] **Chunked summarization** — Handle users with 200+ beliefs without exceeding context limits
+- [ ] **Comparison race condition** — Prevent double-execution if two users accept simultaneously
+- [ ] **Richer comparison request DMs** — Explain what Kodak is to recipients who may not know the bot
 
 ---
 
@@ -804,12 +830,27 @@ Or: Let them chat briefly with each personality before committing.
 - `/help` — Full command reference with categories
 - `/map` — ASCII-style visualization by topic with confidence bars
 - `/explore [topic]` — Deep dive with topic suggestions if none found
-- `/beliefs` — Raw list with visual confidence indicators
+- `/beliefs` — Raw list with importance (★) and confidence (●) indicators
+- `/belief [id]` — View single belief with its connections
+- `/core` — Show only important beliefs (★★★★+)
+- `/tensions` — Show beliefs that contradict each other
+- `/history [id]` — See how a belief has evolved over time
+- `/changes [days]` — See beliefs that changed recently
+- `/mark [id] [1-5]` — Set belief importance level
+- `/confidence [id] [1-5]` — Update confidence and record evolution
+- `/share [topic] [core_only]` — Create shareable belief snapshot with embed and copy-paste formats
+- `/compare @user` — Request belief comparison with another user
+- `/requests` — See pending comparison requests
+- `/bridging` — See bridging score and bridging beliefs
+- `/privacy` — View/change belief visibility settings
+- `/share-export` — Export shareable beliefs as JSON file
+- `/compare-file` — Compare with someone's exported file
 - `/forget [id]` — Supports "last" keyword for most recent
 - `/setup` — Interactive personality selection with previews
 - `/style` — Visual bar display for current settings
 - `/pause` / `/resume` — Toggle belief tracking
 - `/export` — Download all data as JSON file
+- `/backup` — Download database backup file
 - `/clear` — Delete everything with confirmation modal
 
 **Natural Language Support**
