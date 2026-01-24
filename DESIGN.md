@@ -296,33 +296,108 @@ UserPersonality {
 
 ## Roadmap
 
-### Now (v0.1 - Friends Launch)
+### Completed (v0.1 - Friends Launch)
 - [x] Core bot functionality
 - [x] Onboarding flow
 - [x] Belief extraction
-- [x] Privacy controls
-- [x] README documentation
-- [ ] **Store and display belief relations** (shows WHY/connections)
-- [ ] **Atomic belief breakdown** (split compound beliefs)
-- [ ] Verify multi-user DMs work
+- [x] Privacy controls (pause, export, clear)
+- [x] README and SETUP documentation
+- [x] Personality system with anti-sycophancy design
+- [x] Rate limiting (configurable)
+- [x] Self-hosting guide
 
-### Next (v0.2)
-- [ ] Belief evolution tracking (how beliefs change over time)
-- [ ] Rate limiting / usage caps
-- [ ] Belief comparison between users (opt-in)
-- [ ] Better topic clustering
+### Now (v0.2 - Belief Understanding)
+- [ ] **Belief importance marking** — Let users mark beliefs 1-5 importance
+- [ ] **Belief evolution tracking** — How beliefs change over time
+- [ ] **Better relation display** — Show WHY beliefs connect
+- [ ] **Shareable export format** — Clean format for sharing in Discord
 
-### Later (v0.3+)
+### Next (v0.3 - Comparison & Community)
+- [ ] **1:1 Belief comparison** — Compare your map with another user (opt-in)
+- [ ] **Similarity score** — Weighted by importance (OkCupid-style)
+- [ ] **Bridging score** — How often do you agree with people who usually disagree?
+- [ ] **Tiered privacy** — Public / connections-only / mutual consent / hidden
+- [ ] **Consensus finder** — Surface beliefs that bridge different clusters
+
+### Later (v0.4+ - Advanced Features)
+- [ ] **Compatibility algorithm** — Multi-factor matching (semantic + structural + importance-weighted)
+- [ ] **"Interesting differences" matching** — Suggest productive disagreements, not just similarity
+- [ ] **Community aggregates** — "X% of server believes Y" (anonymized)
+- [ ] **Bridge Builder badges** — Reward productive cross-divide engagement
 - [ ] Web-based visualization
 - [ ] Export to Obsidian/Roam format
-- [ ] API for external integrations
-- [ ] Self-hosted deployment guide
 
 ### Backlog / Ideas
-- [ ] Voice channel support?
+- [ ] Pol.is-style opinion clustering and visualization
 - [ ] Scheduled check-ins ("How do you feel about X now?")
-- [ ] Belief "challenges" (Socratic prompts to test beliefs)
-- [ ] Community belief maps (aggregate, anonymized)
+- [ ] Steelmanned opposing beliefs ("Here's the best case for the other side")
+- [ ] Voice channel support?
+
+---
+
+## Expert Research: Belief Comparison & Compatibility
+
+### Sources Consulted
+
+**Compatibility Algorithms**
+- Helen Fisher's Fisher Temperament Inventory (Match.com) — personality types based on neurochemistry
+- OkCupid's weighted question system — importance weighting (Irrelevant=0 to Mandatory=250x)
+
+**Network Comparison**
+- Graph similarity methods: feature-based, spectral, graph edit distance
+- SimGNN neural network approach for scalable comparison
+- Sentence embeddings for semantic similarity of belief statements
+
+**Collective Intelligence**
+- [Pol.is](https://compdemocracy.org/polis/) — computational democracy, finds bridging consensus
+- [Deliberative Polling](https://deliberation.stanford.edu/) — James Fishkin's structured deliberation
+- [Twitter Community Notes](https://arxiv.org/abs/2210.15723) — bridging-based ranking algorithm
+
+**Filter Bubbles & Bridging**
+- Eli Pariser's filter bubble research
+- Key finding: Simply exposing opposing views can increase polarization (backfire effect)
+- Better approach: Find bridging beliefs valued across divides
+
+**Privacy**
+- Differential privacy for aggregate statistics
+- Tiered disclosure models for belief sharing
+
+### Key Design Principles
+
+1. **Bridging > Exposure**: Don't just show opposing views; help users find common ground first
+
+2. **Importance weighting matters**: Core beliefs should count more than peripheral ones (OkCupid's 250x weight for "mandatory")
+
+3. **Diversity of appreciation = quality**: Content/beliefs are valuable when appreciated across divides (Community Notes insight)
+
+4. **Privacy enables honesty**: Tiered disclosure lets users share authentically without fear
+
+5. **Bounded confidence is real**: People only engage within their comfort zone — design for gradual bridging, not shock exposure
+
+6. **Epistemic humility markers**: Track and reward openness to revision, not just belief consistency
+
+### Proposed Algorithms
+
+**Similarity Score**
+```
+Overall_Similarity =
+    w1 * Semantic_Similarity +      // Do beliefs mean similar things?
+    w2 * Structural_Similarity +    // Are they connected similarly?
+    w3 * Importance_Weighted_Match  // Do you agree on what matters?
+```
+
+**Bridging Score**
+- Track when users agree with beliefs typically held by opposing clusters
+- Higher bridging score = more valuable for community discussions
+- Reward engagement across divides, not just within echo chambers
+
+**Tiered Privacy Model**
+| Level | Visibility |
+|-------|------------|
+| Public | All server members |
+| Connections | Mutual follows only |
+| Consent | Both parties opt-in |
+| Hidden | Factors into similarity but never shown |
 
 ---
 
@@ -331,8 +406,8 @@ UserPersonality {
 - How does the bot decide something is a "belief" vs just a statement?
 - How granular? "I like coffee" vs "Small pleasures matter" vs "Hedonism is valid"
 - What visualization approach for the belief map?
-- How to handle belief extraction from casual chat without feeling surveillance-y?
-- Privacy controls: what can users delete, export, hide?
+- How to handle backfire effect when showing belief differences?
+- What's the right balance of similarity vs "interesting differences" in matching?
 
 ---
 
