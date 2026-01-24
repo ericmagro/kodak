@@ -139,7 +139,45 @@ Research shows users who chat with sycophantic AI become *more confident they're
 
 ## Bot Personality System
 
-Users configure the bot's personality along these dimensions:
+### Why These Four Dimensions?
+
+We needed dimensions that:
+1. **Matter for belief exploration** — affect how users open up and engage
+2. **Are independent** — can be mixed freely without contradiction
+3. **Map to real conversational differences** — users can feel the change
+4. **Don't enable sycophancy** — no dimension should encourage empty validation
+
+After reviewing personality research (Big Five, HEXACO) and conversational design literature, we chose:
+
+| Dimension | Why It Matters for Belief Mapping |
+|-----------|-----------------------------------|
+| **Warmth** | Affects psychological safety. Higher warmth → users share more vulnerable beliefs. But we define warmth as caring about the *person*, not agreeing with their ideas. |
+| **Directness** | Affects how contradictions and challenges are surfaced. Low = hints and questions. High = states observations plainly. Critical for honest engagement. |
+| **Playfulness** | Affects tone and approachability. Some users open up more with humor; others prefer seriousness. Neither is more honest than the other. |
+| **Formality** | Affects language register. Casual = more like texting a friend. Formal = more like a structured interview. Changes the feel without changing honesty. |
+
+### What We Didn't Include (and Why)
+
+- **"Challenge" as a dimension**: We originally had this, but renamed it to "Directness." "Challenge" implied the bot was *trying* to argue, which isn't the goal. Directness is about *how* you say things, not whether you're adversarial.
+- **"Agreeableness"**: Too close to sycophancy. We don't want a slider that makes the bot more validating.
+- **"Empathy"**: Overlaps with warmth. And true empathy includes honest feedback, so it's baked into the core, not a dial.
+- **"Intelligence" or "Depth"**: Every configuration should be intellectually engaged. This isn't a dial.
+
+### How Dimensions Interact
+
+The magic is in combinations:
+
+| Combination | Result |
+|-------------|--------|
+| High warmth + High directness | Caring honesty. "I hear you, and I think there's a flaw in that reasoning." |
+| High warmth + Low directness | Gentle exploration. Hints at issues through questions. |
+| Low warmth + High directness | Analytical bluntness. "That contradicts what you said earlier." |
+| High playfulness + High directness | Trickster energy. Challenges through humor and provocation. |
+| High formality + High directness | Academic rigor. Precise, structured pushback. |
+
+No combination should produce sycophancy. Even high warmth + low directness + high playfulness results in a friendly, gentle explorer—not a cheerleader.
+
+### The Dimensions
 
 | Dimension | Low (1) | High (5) |
 |-----------|---------|----------|
@@ -150,13 +188,19 @@ Users configure the bot's personality along these dimensions:
 
 Each dimension: 1-5 scale. Note that warmth is about accepting the *person*—it never means validating all their ideas. Even at warmth=5, the bot remains genuinely honest.
 
-### Example Personality Presets
+### Personality Presets
 
-- **The Philosopher**: Mid warmth, high directness, low playfulness, high formality
-- **The Best Friend**: High warmth, mid directness, high playfulness—"the friend who cares enough to be honest"
-- **The Scientist**: Low warmth, high directness, low playfulness, high formality
-- **The Trickster**: Mid warmth, high directness, high playfulness, low formality
-- **The Therapist**: High warmth, mid directness—"accepts you fully, questions your conclusions"
+Presets are curated combinations designed for different user preferences:
+
+| Preset | Warmth | Directness | Playfulness | Formality | Vibe |
+|--------|--------|------------|-------------|-----------|------|
+| **The Philosopher** | 3 | 4 | 2 | 4 | Thoughtful Socratic dialogue. Probes foundations. |
+| **The Best Friend** | 5 | 3 | 4 | 1 | Warm and real. The friend who cares enough to be honest. |
+| **The Scientist** | 2 | 5 | 1 | 5 | Precise and analytical. Focused on evidence and logic. |
+| **The Trickster** | 3 | 4 | 5 | 1 | Playful provocateur. Makes you think through humor. |
+| **The Therapist** | 5 | 3 | 2 | 3 | Creates safety. Accepts you fully, questions your conclusions. |
+
+Note: All presets have directness ≥ 3. We intentionally avoided creating a "yes-man" preset.
 
 ---
 
