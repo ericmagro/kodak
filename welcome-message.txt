@@ -2,6 +2,8 @@ Welcome to Kodak 📸
 
 Kodak is a bot that maps your beliefs through conversation. Just chat naturally, and it builds a picture of what you think and why — your assumptions, values, and how ideas connect.
 
+Kodak is designed to be warm but honest — it'll ask real questions and point out contradictions. Think of it like a curious friend who actually engages with your ideas, not a yes-man.
+
 **How to use:**
 1. Click on @Kodak in the member list (right sidebar)
 2. Click "Message" to start a DM
