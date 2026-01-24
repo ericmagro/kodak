@@ -18,21 +18,21 @@
 
 **Goal:** Database ready, scheduler working, basic session tracking
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 1.1 | `schema-v2.sql` | New schema with scheduling, sessions, values tables | ⬜ |
-| 1.2 | `src/db_v2.py` | Database functions for v2 (sessions, scheduling, values) | ⬜ |
-| 1.3 | `src/scheduler.py` | Background task for daily prompts + catch-up logic | ⬜ |
-| 1.4 | `src/values.py` | Schwartz constants, value derivation functions | ⬜ |
-| 1.5 | `src/bot_v2.py` | Core bot with scheduler integration (minimal commands) | ⬜ |
+| 1.1 | `schema-v2.sql` | New schema with scheduling, sessions, values tables | ✅ |
+| 1.2 | `src/db_v2.py` | Database functions for v2 (sessions, scheduling, values) | ✅ |
+| 1.3 | `src/scheduler.py` | Background task for daily prompts + catch-up logic | ✅ |
+| 1.4 | `src/values.py` | Schwartz constants, value derivation functions | ✅ |
+| 1.5 | `src/bot_v2.py` | Core bot with scheduler integration (minimal commands) | ✅ |
 
 **Definition of done:**
-- [ ] Bot starts without errors
-- [ ] Scheduler runs as background task
-- [ ] Can send a test prompt at a configured time
-- [ ] Database tables created correctly
+- [x] Bot starts without errors
+- [x] Scheduler runs as background task
+- [x] Can send a test prompt at a configured time
+- [x] Database tables created correctly
 
 ---
 
@@ -40,22 +40,22 @@
 
 **Goal:** User can complete onboarding, receive prompts, have a journaling session
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 2.1 | `src/onboarding.py` | New onboarding flow (personality → schedule) | ⬜ |
-| 2.2 | `src/prompts.py` | Opener pools, probe templates, closure templates | ⬜ |
-| 2.3 | `src/session.py` | Session state management (opener → probe → close) | ⬜ |
-| 2.4 | `src/personality_v2.py` | Adapted personality system for journaling | ⬜ |
-| 2.5 | `src/bot_v2.py` | Wire up onboarding, session handling | ⬜ |
+| 2.1 | `src/onboarding.py` | New onboarding flow (personality → schedule) | ✅ |
+| 2.2 | `src/prompts.py` | Opener pools, probe templates, closure templates | ✅ |
+| 2.3 | `src/session.py` | Session state management (opener → probe → close) | ✅ |
+| 2.4 | `src/personality_v2.py` | Adapted personality system for journaling | ✅ |
+| 2.5 | `src/bot_v2.py` | Wire up onboarding, session handling | ✅ |
 
 **Definition of done:**
-- [ ] New user can complete onboarding (personality + time selection)
-- [ ] User receives prompt at scheduled time
-- [ ] Full session works: opener → probes → closure
-- [ ] Session adapts to response depth
-- [ ] First session has special handling (lighter probing)
+- [x] New user can complete onboarding (personality + time selection)
+- [x] User receives prompt at scheduled time
+- [x] Full session works: opener → probes → closure
+- [x] Session adapts to response depth
+- [x] First session has special handling (lighter probing)
 
 ---
 
@@ -63,23 +63,23 @@
 
 **Goal:** Beliefs extracted from sessions, values derived and stored
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 3.1 | `src/extractor_v2.py` | Extended extraction: beliefs + value tagging | ⬜ |
-| 3.2 | `src/values.py` | Value profile aggregation, normalization, temporal decay | ⬜ |
-| 3.3 | `src/db_v2.py` | Store belief-value mappings, snapshots | ⬜ |
-| 3.4 | `src/bot_v2.py` | `/values`, `/values-history` commands | ⬜ |
-| 3.5 | `src/session.py` | Show extracted beliefs at session close | ⬜ |
+| 3.1 | `src/extractor_v2.py` | Extended extraction: beliefs + value tagging | ✅ |
+| 3.2 | `src/values.py` | Value profile aggregation, normalization, temporal decay | ✅ (done in Sprint 1) |
+| 3.3 | `src/db_v2.py` | Store belief-value mappings, snapshots | ✅ (done in Sprint 1) |
+| 3.4 | `src/bot_v2.py` | `/values`, `/values-history` commands | ✅ |
+| 3.5 | `src/bot_v2.py` | Show extracted beliefs at session close | ✅ |
 
 **Definition of done:**
-- [ ] Beliefs extracted from journal sessions
-- [ ] Each belief tagged with 0-3 Schwartz values + mapping confidence
-- [ ] Value profile aggregates correctly (with temporal decay)
-- [ ] `/values` shows narrative profile
-- [ ] `/values-history` shows change over time
-- [ ] Session close shows extracted beliefs
+- [x] Beliefs extracted from journal sessions
+- [x] Each belief tagged with 0-3 Schwartz values + mapping confidence
+- [x] Value profile aggregates correctly (with temporal decay)
+- [x] `/values` shows narrative profile
+- [x] `/values-history` shows change over time
+- [x] Session close shows extracted beliefs
 
 ---
 
@@ -87,24 +87,24 @@
 
 **Goal:** All commands working, edge cases handled
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 4.1 | `src/bot_v2.py` | Migrate `/map`, `/beliefs`, `/explore`, `/belief`, `/forget`, `/undo` | ⬜ |
-| 4.2 | `src/bot_v2.py` | Migrate `/history`, `/tensions`, `/changes`, `/mark`, `/confidence` | ⬜ |
-| 4.3 | `src/bot_v2.py` | New: `/schedule`, `/timezone`, `/depth`, `/journal`, `/skip` | ⬜ |
-| 4.4 | `src/bot_v2.py` | Migrate `/setup`, `/style`, `/pause`, `/resume` | ⬜ |
-| 4.5 | `src/bot_v2.py` | Migrate `/export`, `/backup`, `/clear` | ⬜ |
-| 4.6 | `src/bot_v2.py` | Updated `/help` for v2 | ⬜ |
-| 4.7 | `src/scheduler.py` | Edge cases: re-engagement, missed prompts, mid-day schedule change | ⬜ |
+| 4.1 | `src/bot_v2.py` | Migrate `/map`, `/beliefs`, `/explore`, `/belief`, `/forget`, `/undo` | ✅ |
+| 4.2 | `src/bot_v2.py` | Migrate `/history`, `/tensions`, `/changes`, `/mark`, `/confidence` | ✅ |
+| 4.3 | `src/bot_v2.py` | New: `/schedule`, `/timezone`, `/depth`, `/journal`, `/skip` | ✅ |
+| 4.4 | `src/bot_v2.py` | Migrate `/setup`, `/style`, `/pause`, `/resume` | ✅ |
+| 4.5 | `src/bot_v2.py` | Migrate `/export`, `/backup`, `/clear` | ✅ |
+| 4.6 | `src/bot_v2.py` | Updated `/help` for v2 | ✅ |
+| 4.7 | `src/scheduler.py` | Edge cases: re-engagement, missed prompts, mid-day schedule change | ✅ |
 
 **Definition of done:**
-- [ ] All retained commands work
-- [ ] All new commands work
-- [ ] Re-engagement flow works (user absent 2+ weeks)
-- [ ] Missed prompt catch-up works
-- [ ] `/help` reflects v2 commands
+- [x] All retained commands work
+- [x] All new commands work
+- [x] Re-engagement flow works (user absent 2+ weeks)
+- [x] Missed prompt catch-up works
+- [x] `/help` reflects v2 commands
 
 ---
 
@@ -112,20 +112,20 @@
 
 **Goal:** File-based value comparison working
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 5.1 | `src/bot_v2.py` | `/share-values` with privacy selection UI | ⬜ |
-| 5.2 | `src/values.py` | Export format (JSON schema) | ⬜ |
-| 5.3 | `src/bot_v2.py` | `/compare-file` — load, compare, display | ⬜ |
-| 5.4 | `src/values.py` | Comparison algorithm (similarity, differences) | ⬜ |
+| 5.1 | `src/bot_v2.py` | `/share-values` with privacy selection UI | ✅ |
+| 5.2 | `src/values.py` | Export format (JSON schema) | ✅ |
+| 5.3 | `src/bot_v2.py` | `/compare-file` — load, compare, display | ✅ |
+| 5.4 | `src/values.py` | Comparison algorithm (similarity, differences) | ✅ |
 
 **Definition of done:**
-- [ ] User can export values with privacy selection
-- [ ] Export file is valid JSON with documented schema
-- [ ] Recipient can load file and see comparison
-- [ ] Comparison shows: overall alignment, shared priorities, differences
+- [x] User can export values with privacy selection
+- [x] Export file is valid JSON with documented schema
+- [x] Recipient can load file and see comparison
+- [x] Comparison shows: overall alignment, shared priorities, differences
 
 ---
 
@@ -133,57 +133,62 @@
 
 **Goal:** Remove v1 code, update all docs, ready for release
 
-**Status:** Not started
+**Status:** ✅ Complete
 
 | Task | File | Description | Status |
 |------|------|-------------|--------|
-| 6.1 | Various | Remove v1 files (`bot.py`, `db.py`, etc.) | ⬜ |
-| 6.2 | Various | Rename v2 files (remove `_v2` suffix) | ⬜ |
-| 6.3 | `schema.sql` | Replace with v2 schema | ⬜ |
-| 6.4 | `README.md` | Update for v2 (description, commands, setup) | ⬜ |
-| 6.5 | `SETUP.md` | Update for any new setup steps | ⬜ |
-| 6.6 | `SETUP.md` | Add auto-start documentation (macOS, Linux, Windows) | ⬜ |
-| 6.7 | `DESIGN.md` | Archive v1 design or merge relevant parts | ⬜ |
+| 6.1 | Various | Remove v1 files (`bot.py`, `db.py`, etc.) | ✅ |
+| 6.2 | Various | Rename v2 files (remove `_v2` suffix) | ✅ |
+| 6.3 | `schema.sql` | Replace with v2 schema | ✅ |
+| 6.4 | `README.md` | Update for v2 (description, commands, setup) | ✅ |
+| 6.5 | `SETUP.md` | Update for any new setup steps | ✅ |
+| 6.6 | `SETUP.md` | Add auto-start documentation (macOS, Linux, Windows) | ✅ |
+| 6.7 | `DESIGN.md` | Archive v1 design or merge relevant parts | ✅ |
 
 **Definition of done:**
-- [ ] No v1 code remains
-- [ ] All documentation reflects v2
-- [ ] Auto-start instructions for all platforms
-- [ ] Clean git history (no leftover v2 suffixes)
+- [x] No v1 code remains
+- [x] All documentation reflects v2
+- [x] Auto-start instructions for all platforms
+- [x] Clean git history (no leftover v2 suffixes)
 
 ---
 
-## File Overview
+## File Overview (Final)
 
-### New Files (v2)
+### Source Files
 
 | File | Purpose |
 |------|---------|
-| `schema-v2.sql` | Database schema for v2 |
-| `src/bot_v2.py` | Main bot with v2 logic |
-| `src/db_v2.py` | Database functions for v2 |
+| `schema.sql` | Database schema |
+| `src/bot.py` | Main bot with session handling, all commands |
+| `src/db.py` | Database functions |
 | `src/scheduler.py` | Daily prompt scheduler |
-| `src/values.py` | Schwartz values framework |
+| `src/values.py` | Schwartz values framework + comparison |
 | `src/session.py` | Session state management |
 | `src/prompts.py` | Opener pools, probes, closures |
 | `src/onboarding.py` | Onboarding flow |
-| `src/personality_v2.py` | Adapted personality system |
-| `src/extractor_v2.py` | Belief + value extraction |
+| `src/personality.py` | Personality presets and dimensions |
+| `src/extractor.py` | Belief + value extraction |
 
-### Retained from v1 (may need minor updates)
+### Documentation
 
-| File | Notes |
-|------|-------|
-| `src/personality.py` | Base for `personality_v2.py` |
-| `src/extractor.py` | Base for `extractor_v2.py` |
+| File | Purpose |
+|------|---------|
+| `README.md` | User-facing overview and commands |
+| `SETUP.md` | Self-hosting guide with auto-start |
+| `DESIGN.md` | Technical design document (v2) |
+| `DESIGN-v1.md` | Archived v1 design |
+| `IMPLEMENTATION-PLAN.md` | This file - sprint tracking |
 
-### Removed in Sprint 6
+### Removed (v1)
 
-| File | Reason |
+| File | Status |
 |------|--------|
-| `src/bot.py` | Replaced by `bot_v2.py` |
-| `src/db.py` | Replaced by `db_v2.py` |
-| `schema.sql` | Replaced by `schema-v2.sql` |
+| `src/bot.py` (v1) | Removed |
+| `src/db.py` (v1) | Removed |
+| `src/extractor.py` (v1) | Removed |
+| `src/personality.py` (v1) | Removed |
+| `schema.sql` (v1) | Removed |
 
 ---
 
@@ -194,6 +199,12 @@
 | Date | Sprint | Notes |
 |------|--------|-------|
 | 2026-01-24 | Planning | Created DESIGN-v2.md and this implementation plan |
+| 2026-01-24 | Sprint 1 | Completed: schema-v2.sql, values.py, db_v2.py, scheduler.py, bot_v2.py. All tests passing. |
+| 2026-01-24 | Sprint 2 | Completed: onboarding.py, prompts.py, session.py, personality_v2.py, updated bot_v2.py. Full session flow implemented. |
+| 2026-01-24 | Sprint 3 | Completed: extractor_v2.py with value tagging, integrated extraction into sessions, added /values-history, beliefs shown at close. |
+| 2026-01-24 | Sprint 4 | Completed: All belief commands (/map, /beliefs, /explore, /belief, /forget, /undo, /history, /tensions, /changes, /mark, /confidence, /core), scheduling commands (/schedule, /timezone, /depth, /journal, /skip), user commands (/setup, /style, /pause, /resume), data commands (/export, /backup, /clear). Updated /help. Added scheduler edge cases (mid-day schedule change, periodic re-engagement). |
+| 2026-01-24 | Sprint 5 | Completed: File-based value comparison. Added export format with schema version 1.0. /share-values with privacy selection UI (choose values, optional beliefs, display name). /compare-file loads attached JSON and shows alignment %, shared priorities, differences. Updated /help. |
+| 2026-01-24 | Sprint 6 | Completed: Removed v1 files (bot.py, db.py, extractor.py, personality.py, schema.sql). Renamed v2 files (removed _v2 suffix). Updated imports. Archived DESIGN.md → DESIGN-v1.md, renamed DESIGN-v2.md → DESIGN.md. Updated README.md for v2 (journaling focus, new commands, values framework). Added auto-start instructions to SETUP.md (macOS launchd, Linux systemd, Windows Task Scheduler). |
 
 ---
 

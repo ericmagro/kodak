@@ -1,147 +1,54 @@
-"""Database operations for Kodak."""
+"""Database operations for Kodak v2."""
 
 import os
+import json
 import logging
 import aiosqlite
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
+
+from values import (
+    ALL_VALUES, ValueProfile, ValueScore, BeliefValueMapping,
+    aggregate_value_profile
+)
 
 logger = logging.getLogger('kodak')
 
-# Allow DB_PATH to be configured via environment variable
-_default_db_path = Path(__file__).parent.parent / "kodak.db"
-DB_PATH = Path(os.getenv("KODAK_DB_PATH", str(_default_db_path)))
-SCHEMA_PATH = Path(__file__).parent.parent / "schema.sql"
-
-# Current schema version - increment when adding migrations
-SCHEMA_VERSION = 1
-
-# Migrations: list of (version, description, sql) tuples
-# Each migration brings the DB from version-1 to version
-MIGRATIONS = [
-    # Version 1: Add visibility column to beliefs table (for v0.3 privacy features)
-    (1, "Add visibility column to beliefs", """
-        ALTER TABLE beliefs ADD COLUMN visibility TEXT DEFAULT 'shareable';
-    """),
-]
-
-
-async def _get_schema_version(db) -> int:
-    """Get current schema version, or 0 if not set."""
-    try:
-        cursor = await db.execute(
-            "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
-        )
-        row = await cursor.fetchone()
-        return row[0] if row else 0
-    except aiosqlite.OperationalError:
-        # Table doesn't exist yet
-        return 0
-
-
-async def _run_migrations(db):
-    """Run any pending migrations."""
-    current_version = await _get_schema_version(db)
-
-    for version, description, sql in MIGRATIONS:
-        if version > current_version:
-            try:
-                logger.info(f"Running migration {version}: {description}")
-                await db.executescript(sql)
-                await db.execute(
-                    "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-                    (version, datetime.now().isoformat())
-                )
-                await db.commit()
-                logger.info(f"Migration {version} complete")
-            except aiosqlite.OperationalError as e:
-                # Column might already exist from schema.sql
-                if "duplicate column name" in str(e).lower():
-                    logger.info(f"Migration {version}: Column already exists, skipping")
-                    await db.execute(
-                        "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-                        (version, datetime.now().isoformat())
-                    )
-                    await db.commit()
-                else:
-                    raise
-
-
-# Topic synonyms for normalization
-# Maps variant terms to a canonical form
-TOPIC_SYNONYMS = {
-    # Work/career
-    "job": "work",
-    "career": "work",
-    "employment": "work",
-    "profession": "work",
-    "occupation": "work",
-    # Relationships
-    "dating": "relationships",
-    "romance": "relationships",
-    "love": "relationships",
-    "marriage": "relationships",
-    "partner": "relationships",
-    # Family
-    "parents": "family",
-    "children": "family",
-    "kids": "family",
-    "parenting": "family",
-    # Health
-    "fitness": "health",
-    "wellness": "health",
-    "exercise": "health",
-    "mental health": "health",
-    # Money
-    "finance": "money",
-    "finances": "money",
-    "financial": "money",
-    "wealth": "money",
-    "investing": "money",
-    # Politics
-    "political": "politics",
-    "government": "politics",
-    # Religion/spirituality
-    "faith": "spirituality",
-    "religion": "spirituality",
-    "religious": "spirituality",
-    "god": "spirituality",
-    # Technology
-    "tech": "technology",
-    "ai": "technology",
-    "computers": "technology",
-    "software": "technology",
+# Allowed columns for dynamic updates (SQL injection prevention)
+ALLOWED_USER_COLUMNS = {
+    'username', 'personality_preset', 'prompt_time', 'prompt_depth', 'timezone',
+    'onboarding_complete', 'tracking_paused', 'last_prompt_sent', 'last_prompt_responded',
+    'prompts_ignored', 'last_active', 'last_prompt_date', 'updated_at'
 }
 
+ALLOWED_SESSION_COLUMNS = {
+    'session_stage', 'ended_at', 'message_count', 'beliefs_extracted', 'opener_used'
+}
 
-def normalize_topic(topic: str) -> str:
-    """Normalize a topic to its canonical form."""
-    topic = topic.lower().strip()
-    return TOPIC_SYNONYMS.get(topic, topic)
+# Database path configuration
+_default_db_path = Path(__file__).parent.parent / "kodak-v2.db"
+DB_PATH = Path(os.getenv("KODAK_DB_PATH", str(_default_db_path)))
+SCHEMA_PATH = Path(__file__).parent.parent / "schema-v2.sql"
 
+
+# ============================================
+# INITIALIZATION
+# ============================================
 
 async def init_db():
-    """Initialize the database with schema and run migrations."""
+    """Initialize the database with v2 schema."""
     async with aiosqlite.connect(DB_PATH) as db:
-        # Create schema_version table if it doesn't exist
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL
-            )
-        """)
-        await db.commit()
-
-        # Run the base schema
         with open(SCHEMA_PATH) as f:
             await db.executescript(f.read())
         await db.commit()
+        logger.info(f"Database initialized at {DB_PATH}")
 
-        # Run any pending migrations
-        await _run_migrations(db)
 
+# ============================================
+# USERS
+# ============================================
 
 async def get_or_create_user(user_id: str, username: str = None) -> dict:
     """Get or create a user record."""
@@ -155,9 +62,9 @@ async def get_or_create_user(user_id: str, username: str = None) -> dict:
         if row:
             return dict(row)
 
-        # Create new user with defaults
+        # Create new user
         await db.execute(
-            """INSERT INTO users (user_id, username) VALUES (?, ?)""",
+            "INSERT INTO users (user_id, username) VALUES (?, ?)",
             (user_id, username)
         )
         await db.commit()
@@ -169,34 +76,29 @@ async def get_or_create_user(user_id: str, username: str = None) -> dict:
         return dict(row)
 
 
-async def update_user_personality(
-    user_id: str,
-    warmth: int = None,
-    directness: int = None,
-    playfulness: int = None,
-    formality: int = None,
-    extraction_mode: str = None
-) -> dict:
-    """Update user personality settings."""
+async def update_user(user_id: str, **kwargs) -> dict:
+    """Update user fields."""
+    if not kwargs:
+        return await get_or_create_user(user_id)
+
+    # Handle mid-day schedule change: if user changes prompt_time to a future
+    # time today, clear last_prompt_date so they can receive a prompt today
+    if 'prompt_time' in kwargs:
+        new_time = kwargs['prompt_time']
+        if new_time and _is_future_time_today(new_time):
+            kwargs['last_prompt_date'] = None
+
     updates = []
     values = []
+    for key, value in kwargs.items():
+        # Validate column name to prevent SQL injection
+        if key not in ALLOWED_USER_COLUMNS:
+            logger.warning(f"Attempted to update disallowed column: {key}")
+            continue
+        updates.append(f"{key} = ?")
+        values.append(value)
 
-    if warmth is not None:
-        updates.append("warmth = ?")
-        values.append(warmth)
-    if directness is not None:
-        updates.append("directness = ?")
-        values.append(directness)
-    if playfulness is not None:
-        updates.append("playfulness = ?")
-        values.append(playfulness)
-    if formality is not None:
-        updates.append("formality = ?")
-        values.append(formality)
-    if extraction_mode is not None:
-        updates.append("extraction_mode = ?")
-        values.append(extraction_mode)
-
+    # If all columns were filtered, just return current user
     if not updates:
         return await get_or_create_user(user_id)
 
@@ -214,136 +116,227 @@ async def update_user_personality(
     return await get_or_create_user(user_id)
 
 
-async def complete_onboarding(user_id: str) -> dict:
-    """Mark user onboarding as complete."""
+def _is_future_time_today(time_str: str) -> bool:
+    """Check if a time string (HH:MM) is in the future today."""
+    try:
+        hour, minute = map(int, time_str.split(':'))
+        now = datetime.now()
+        scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        return scheduled > now
+    except (ValueError, AttributeError):
+        return False
+
+
+async def get_users_for_prompt(current_time: str) -> list[dict]:
+    """
+    Get users who should receive a prompt at the given time.
+
+    current_time format: "HH:MM" (24-hour)
+    """
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET onboarding_complete = 1, updated_at = ? WHERE user_id = ?",
-            (datetime.now().isoformat(), user_id)
-        )
-        await db.commit()
-    return await get_or_create_user(user_id)
+        db.row_factory = aiosqlite.Row
 
-
-async def set_tracking_paused(user_id: str, paused: bool) -> dict:
-    """Pause or resume belief tracking for a user."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET tracking_paused = ?, updated_at = ? WHERE user_id = ?",
-            (1 if paused else 0, datetime.now().isoformat(), user_id)
-        )
-        await db.commit()
-    return await get_or_create_user(user_id)
-
-
-async def increment_message_count(user_id: str) -> int:
-    """Increment message count since last summary. Returns new count."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE users SET messages_since_summary = messages_since_summary + 1 WHERE user_id = ?",
-            (user_id,)
-        )
-        await db.commit()
+        # Get users where:
+        # - onboarding complete
+        # - tracking not paused
+        # - prompt_time matches current time
+        # - haven't received prompt today
+        today = datetime.now().date().isoformat()
 
         cursor = await db.execute(
-            "SELECT messages_since_summary FROM users WHERE user_id = ?",
+            """SELECT * FROM users
+               WHERE onboarding_complete = 1
+                 AND tracking_paused = 0
+                 AND prompt_time = ?
+                 AND (last_prompt_sent IS NULL OR last_prompt_sent < ?)
+            """,
+            (current_time, today)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_users_with_missed_prompts() -> list[dict]:
+    """Get users who missed their prompt today (for catch-up on startup)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        today = datetime.now().date().isoformat()
+        current_time = datetime.now().strftime("%H:%M")
+
+        cursor = await db.execute(
+            """SELECT * FROM users
+               WHERE onboarding_complete = 1
+                 AND tracking_paused = 0
+                 AND prompt_time IS NOT NULL
+                 AND prompt_time < ?
+                 AND (last_prompt_sent IS NULL OR last_prompt_sent < ?)
+            """,
+            (current_time, today)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_users_needing_reengagement(days_threshold: int = 14) -> list[dict]:
+    """Get users who haven't been active for a while."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        threshold_date = (datetime.now() - timedelta(days=days_threshold)).isoformat()
+
+        cursor = await db.execute(
+            """SELECT * FROM users
+               WHERE onboarding_complete = 1
+                 AND (last_active IS NULL OR last_active < ?)
+            """,
+            (threshold_date,)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def mark_prompt_sent(user_id: str):
+    """Mark that a prompt was sent to the user."""
+    await update_user(
+        user_id,
+        last_prompt_sent=datetime.now().isoformat(),
+        last_prompt_responded=0
+    )
+
+
+async def mark_prompt_responded(user_id: str):
+    """Mark that the user responded to their prompt."""
+    await update_user(
+        user_id,
+        last_prompt_responded=1,
+        prompts_ignored=0,
+        last_active=datetime.now().isoformat()
+    )
+
+
+async def increment_prompts_ignored(user_id: str) -> int:
+    """Increment ignored prompt counter and return new count."""
+    user = await get_or_create_user(user_id)
+    new_count = user.get('prompts_ignored', 0) + 1
+    await update_user(user_id, prompts_ignored=new_count)
+    return new_count
+
+
+# ============================================
+# JOURNAL SESSIONS
+# ============================================
+
+async def create_session(
+    user_id: str,
+    prompt_type: str = 'scheduled',
+    opener_used: str = None,
+    session_id: str = None
+) -> dict:
+    """Create a new journal session."""
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO journal_sessions
+               (id, user_id, started_at, prompt_type, opener_used)
+               VALUES (?, ?, ?, ?, ?)""",
+            (session_id, user_id, datetime.now().isoformat(), prompt_type, opener_used)
+        )
+        await db.commit()
+
+    return await get_session(session_id)
+
+
+async def get_session(session_id: str) -> Optional[dict]:
+    """Get a session by ID."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM journal_sessions WHERE id = ?", (session_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def get_active_session(user_id: str) -> Optional[dict]:
+    """Get the user's active (not ended) session if any."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM journal_sessions
+               WHERE user_id = ? AND ended_at IS NULL
+               ORDER BY started_at DESC LIMIT 1""",
             (user_id,)
         )
         row = await cursor.fetchone()
-        return row[0] if row else 0
+        return dict(row) if row else None
 
 
-async def reset_message_count(user_id: str):
-    """Reset message count after showing a summary."""
+async def update_session(session_id: str, **kwargs) -> dict:
+    """Update session fields."""
+    if not kwargs:
+        return await get_session(session_id)
+
+    updates = []
+    values = []
+    for key, value in kwargs.items():
+        # Validate column name to prevent SQL injection
+        if key not in ALLOWED_SESSION_COLUMNS:
+            logger.warning(f"Attempted to update disallowed session column: {key}")
+            continue
+        updates.append(f"{key} = ?")
+        values.append(value)
+
+    # If all columns were filtered, just return current session
+    if not updates:
+        return await get_session(session_id)
+
+    values.append(session_id)
+
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "UPDATE users SET messages_since_summary = 0 WHERE user_id = ?",
-            (user_id,)
+            f"UPDATE journal_sessions SET {', '.join(updates)} WHERE id = ?",
+            values
         )
         await db.commit()
 
+    return await get_session(session_id)
 
-async def get_recent_beliefs(user_id: str, limit: int = 5) -> list[dict]:
-    """Get the most recently captured beliefs."""
+
+async def end_session(session_id: str) -> dict:
+    """End a session."""
+    return await update_session(
+        session_id,
+        ended_at=datetime.now().isoformat(),
+        session_stage='ended'
+    )
+
+
+async def increment_session_messages(session_id: str) -> int:
+    """Increment message count for a session."""
+    session = await get_session(session_id)
+    if not session:
+        return 0
+    new_count = session.get('message_count', 0) + 1
+    await update_session(session_id, message_count=new_count)
+    return new_count
+
+
+async def get_recent_openers(user_id: str, limit: int = 5) -> list[str]:
+    """Get recently used openers for a user (for rotation)."""
     async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT * FROM beliefs
-               WHERE user_id = ? AND is_deleted = 0
-               ORDER BY first_expressed DESC
-               LIMIT ?""",
+            """SELECT opener_used FROM journal_sessions
+               WHERE user_id = ? AND opener_used IS NOT NULL
+               ORDER BY started_at DESC LIMIT ?""",
             (user_id, limit)
         )
-        beliefs = [dict(row) for row in await cursor.fetchall()]
-
-        for belief in beliefs:
-            cursor = await db.execute(
-                "SELECT topic FROM belief_topics WHERE belief_id = ?",
-                (belief["id"],)
-            )
-            belief["topics"] = [row["topic"] for row in await cursor.fetchall()]
-
-        return beliefs
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
 
 
-async def clear_all_user_data(user_id: str) -> bool:
-    """Delete all data for a user (GDPR-style clear)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Delete belief relations first (foreign key)
-        await db.execute(
-            """DELETE FROM belief_relations WHERE source_id IN
-               (SELECT id FROM beliefs WHERE user_id = ?)""",
-            (user_id,)
-        )
-        await db.execute(
-            """DELETE FROM belief_topics WHERE belief_id IN
-               (SELECT id FROM beliefs WHERE user_id = ?)""",
-            (user_id,)
-        )
-        await db.execute(
-            """DELETE FROM belief_evolution WHERE belief_id IN
-               (SELECT id FROM beliefs WHERE user_id = ?)""",
-            (user_id,)
-        )
-        await db.execute("DELETE FROM beliefs WHERE user_id = ?", (user_id,))
-        await db.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
-        await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
-        await db.commit()
-        return True
-
-
-async def export_user_data(user_id: str) -> dict:
-    """Export all user data as a dictionary."""
-    user = await get_or_create_user(user_id)
-    beliefs = await get_user_beliefs(user_id, include_deleted=True)
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-
-        # Get all relations
-        cursor = await db.execute(
-            """SELECT br.* FROM belief_relations br
-               JOIN beliefs b ON br.source_id = b.id
-               WHERE b.user_id = ?""",
-            (user_id,)
-        )
-        relations = [dict(row) for row in await cursor.fetchall()]
-
-        # Get conversation history
-        cursor = await db.execute(
-            "SELECT * FROM conversations WHERE user_id = ? ORDER BY timestamp",
-            (user_id,)
-        )
-        conversations = [dict(row) for row in await cursor.fetchall()]
-
-    return {
-        "user": user,
-        "beliefs": beliefs,
-        "relations": relations,
-        "conversations": conversations,
-        "exported_at": datetime.now().isoformat()
-    }
-
+# ============================================
+# BELIEFS
+# ============================================
 
 async def add_belief(
     user_id: str,
@@ -351,102 +344,126 @@ async def add_belief(
     confidence: float = 0.5,
     source_type: str = None,
     context: str = None,
+    session_id: str = None,
     message_id: str = None,
     channel_id: str = None,
     topics: list[str] = None
 ) -> dict:
-    """Add a new belief to the database."""
+    """Add a new belief."""
     belief_id = str(uuid.uuid4())
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """INSERT INTO beliefs
-               (id, user_id, statement, confidence, source_type, context, message_id, channel_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (belief_id, user_id, statement, confidence, source_type, context, message_id, channel_id)
+               (id, user_id, statement, confidence, source_type, context,
+                session_id, message_id, channel_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (belief_id, user_id, statement, confidence, source_type, context,
+             session_id, message_id, channel_id)
         )
 
-        # Normalize and deduplicate topics
-        normalized_topics = []
+        # Add topics
         if topics:
-            seen = set()
             for topic in topics:
-                normalized = normalize_topic(topic)
-                if normalized not in seen:
-                    seen.add(normalized)
-                    normalized_topics.append(normalized)
-                    await db.execute(
-                        "INSERT INTO belief_topics (belief_id, topic) VALUES (?, ?)",
-                        (belief_id, normalized)
-                    )
+                await db.execute(
+                    "INSERT INTO belief_topics (belief_id, topic) VALUES (?, ?)",
+                    (belief_id, topic.lower().strip())
+                )
+
+        # Increment session beliefs count
+        if session_id:
+            await db.execute(
+                """UPDATE journal_sessions
+                   SET beliefs_extracted = beliefs_extracted + 1
+                   WHERE id = ?""",
+                (session_id,)
+            )
 
         await db.commit()
 
-    return {
-        "id": belief_id,
-        "user_id": user_id,
-        "statement": statement,
-        "confidence": confidence,
-        "source_type": source_type,
-        "context": context,
-        "topics": normalized_topics
-    }
+    return await get_belief(belief_id)
 
 
-async def add_belief_relation(
-    source_id: str,
-    target_id: str,
-    relation_type: str,
-    strength: float = 0.5
-) -> dict:
-    """Add a relationship between two beliefs."""
-    relation_id = str(uuid.uuid4())
-
+async def get_belief(belief_id: str) -> Optional[dict]:
+    """Get a belief by ID."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """INSERT INTO belief_relations
-               (id, source_id, target_id, relation_type, strength)
-               VALUES (?, ?, ?, ?, ?)""",
-            (relation_id, source_id, target_id, relation_type, strength)
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM beliefs WHERE id = ?", (belief_id,)
         )
-        await db.commit()
+        row = await cursor.fetchone()
+        if not row:
+            return None
 
-    return {
-        "id": relation_id,
-        "source_id": source_id,
-        "target_id": target_id,
-        "relation_type": relation_type,
-        "strength": strength
-    }
+        belief = dict(row)
+
+        # Get topics
+        cursor = await db.execute(
+            "SELECT topic FROM belief_topics WHERE belief_id = ?",
+            (belief_id,)
+        )
+        belief['topics'] = [r['topic'] for r in await cursor.fetchall()]
+
+        # Get values
+        cursor = await db.execute(
+            "SELECT value_name, weight, mapping_confidence FROM belief_values WHERE belief_id = ?",
+            (belief_id,)
+        )
+        belief['values'] = [dict(r) for r in await cursor.fetchall()]
+
+        return belief
 
 
-async def get_user_beliefs(user_id: str, include_deleted: bool = False) -> list[dict]:
+async def get_user_beliefs(
+    user_id: str,
+    include_deleted: bool = False,
+    limit: int = None
+) -> list[dict]:
     """Get all beliefs for a user."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
-        if include_deleted:
-            cursor = await db.execute(
-                "SELECT * FROM beliefs WHERE user_id = ? ORDER BY last_referenced DESC",
-                (user_id,)
-            )
-        else:
-            cursor = await db.execute(
-                "SELECT * FROM beliefs WHERE user_id = ? AND is_deleted = 0 ORDER BY last_referenced DESC",
-                (user_id,)
-            )
+        query = "SELECT * FROM beliefs WHERE user_id = ?"
+        params = [user_id]
 
+        if not include_deleted:
+            query += " AND is_deleted = 0"
+
+        query += " ORDER BY first_expressed DESC"
+
+        if limit:
+            query += f" LIMIT {limit}"
+
+        cursor = await db.execute(query, params)
         beliefs = [dict(row) for row in await cursor.fetchall()]
 
         # Fetch topics for each belief
         for belief in beliefs:
             cursor = await db.execute(
                 "SELECT topic FROM belief_topics WHERE belief_id = ?",
-                (belief["id"],)
+                (belief['id'],)
             )
-            belief["topics"] = [row["topic"] for row in await cursor.fetchall()]
+            belief['topics'] = [r['topic'] for r in await cursor.fetchall()]
 
         return beliefs
+
+
+async def get_recent_beliefs(user_id: str, limit: int = 5) -> list[dict]:
+    """Get most recent beliefs."""
+    return await get_user_beliefs(user_id, limit=limit)
+
+
+async def get_all_topics(user_id: str) -> list[str]:
+    """Get all unique topics for a user's beliefs."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """SELECT DISTINCT bt.topic FROM belief_topics bt
+               JOIN beliefs b ON bt.belief_id = b.id
+               WHERE b.user_id = ? AND b.is_deleted = 0
+               ORDER BY bt.topic""",
+            (user_id,)
+        )
+        return [row[0] for row in await cursor.fetchall()]
 
 
 async def get_beliefs_by_topic(user_id: str, topic: str) -> list[dict]:
@@ -457,7 +474,7 @@ async def get_beliefs_by_topic(user_id: str, topic: str) -> list[dict]:
             """SELECT b.* FROM beliefs b
                JOIN belief_topics bt ON b.id = bt.belief_id
                WHERE b.user_id = ? AND bt.topic = ? AND b.is_deleted = 0
-               ORDER BY b.last_referenced DESC""",
+               ORDER BY b.first_expressed DESC""",
             (user_id, topic.lower())
         )
         beliefs = [dict(row) for row in await cursor.fetchall()]
@@ -465,68 +482,97 @@ async def get_beliefs_by_topic(user_id: str, topic: str) -> list[dict]:
         for belief in beliefs:
             cursor = await db.execute(
                 "SELECT topic FROM belief_topics WHERE belief_id = ?",
-                (belief["id"],)
+                (belief['id'],)
             )
-            belief["topics"] = [row["topic"] for row in await cursor.fetchall()]
+            belief['topics'] = [r[0] for r in await cursor.fetchall()]
 
         return beliefs
 
 
-async def get_belief_relations(belief_id: str) -> list[dict]:
-    """Get all relations where this belief is the source."""
+async def update_belief_confidence(belief_id: str, user_id: str, new_confidence: float, trigger: str = None) -> bool:
+    """Update a belief's confidence and record evolution."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
+        # Get current confidence
         cursor = await db.execute(
-            """SELECT br.*, b.statement as target_statement, b.confidence as target_confidence,
-                      b.importance as target_importance
-               FROM belief_relations br
-               JOIN beliefs b ON br.target_id = b.id
-               WHERE br.source_id = ? AND b.is_deleted = 0""",
-            (belief_id,)
+            "SELECT confidence FROM beliefs WHERE id = ? AND user_id = ? AND is_deleted = 0",
+            (belief_id, user_id)
         )
-        return [dict(row) for row in await cursor.fetchall()]
+        row = await cursor.fetchone()
+        if not row:
+            return False
 
+        old_confidence = row['confidence']
 
-async def get_belief_relations_inverse(belief_id: str) -> list[dict]:
-    """Get all relations where this belief is the target (other beliefs point to this one)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+        # Update the belief
         cursor = await db.execute(
-            """SELECT br.*, b.statement as source_statement, b.confidence as source_confidence,
-                      b.importance as source_importance, b.id as source_belief_id
-               FROM belief_relations br
-               JOIN beliefs b ON br.source_id = b.id
-               WHERE br.target_id = ? AND b.is_deleted = 0""",
-            (belief_id,)
+            "UPDATE beliefs SET confidence = ?, last_referenced = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+            (new_confidence, belief_id, user_id)
         )
-        return [dict(row) for row in await cursor.fetchall()]
+        await db.commit()
+
+        if cursor.rowcount == 0:
+            return False
+
+    # Record evolution
+    await record_belief_evolution(
+        belief_id=belief_id,
+        old_confidence=old_confidence,
+        new_confidence=new_confidence,
+        trigger=trigger
+    )
+    return True
 
 
-async def get_all_tensions(user_id: str) -> list[dict]:
-    """Get all contradicting belief pairs for a user."""
+async def update_belief_importance(belief_id: str, user_id: str, importance: int) -> bool:
+    """Update a belief's importance (1-5 scale)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE beliefs SET importance = ? WHERE id = ? AND user_id = ? AND is_deleted = 0",
+            (importance, belief_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_important_beliefs(user_id: str, min_importance: int = 4) -> list[dict]:
+    """Get beliefs marked as important."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT br.*,
-                      b1.statement as source_statement, b1.confidence as source_confidence,
-                      b1.importance as source_importance, b1.id as source_id,
-                      b2.statement as target_statement, b2.confidence as target_confidence,
-                      b2.importance as target_importance, b2.id as target_id
-               FROM belief_relations br
-               JOIN beliefs b1 ON br.source_id = b1.id
-               JOIN beliefs b2 ON br.target_id = b2.id
-               WHERE b1.user_id = ?
-                 AND br.relation_type = 'contradicts'
-                 AND b1.is_deleted = 0
-                 AND b2.is_deleted = 0
-               ORDER BY br.strength DESC, b1.importance DESC""",
+            """SELECT * FROM beliefs
+               WHERE user_id = ? AND is_deleted = 0 AND importance >= ?
+               ORDER BY importance DESC, first_expressed DESC""",
+            (user_id, min_importance)
+        )
+        beliefs = [dict(row) for row in await cursor.fetchall()]
+
+        for belief in beliefs:
+            cursor = await db.execute(
+                "SELECT topic FROM belief_topics WHERE belief_id = ?",
+                (belief['id'],)
+            )
+            belief['topics'] = [r[0] for r in await cursor.fetchall()]
+
+        return beliefs
+
+
+async def get_last_deleted_belief(user_id: str) -> Optional[dict]:
+    """Get the most recently deleted belief for undo."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM beliefs
+               WHERE user_id = ? AND is_deleted = 1
+               ORDER BY first_expressed DESC LIMIT 1""",
             (user_id,)
         )
-        return [dict(row) for row in await cursor.fetchall()]
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 
 async def soft_delete_belief(belief_id: str, user_id: str) -> bool:
-    """Soft delete a belief (mark as deleted)."""
+    """Soft delete a belief."""
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "UPDATE beliefs SET is_deleted = 1 WHERE id = ? AND user_id = ?",
@@ -547,75 +593,9 @@ async def restore_belief(belief_id: str, user_id: str) -> bool:
         return cursor.rowcount > 0
 
 
-async def set_belief_importance(belief_id: str, user_id: str, importance: int) -> bool:
-    """Set the importance level of a belief (1-5)."""
-    if importance < 1 or importance > 5:
-        return False
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "UPDATE beliefs SET importance = ? WHERE id = ? AND user_id = ? AND is_deleted = 0",
-            (importance, belief_id, user_id)
-        )
-        await db.commit()
-        return cursor.rowcount > 0
-
-
-async def get_beliefs_by_importance(user_id: str, min_importance: int = 4) -> list[dict]:
-    """Get beliefs at or above a certain importance level."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """SELECT b.*, GROUP_CONCAT(bt.topic) as topics
-               FROM beliefs b
-               LEFT JOIN belief_topics bt ON b.id = bt.belief_id
-               WHERE b.user_id = ? AND b.is_deleted = 0 AND b.importance >= ?
-               GROUP BY b.id
-               ORDER BY b.importance DESC, b.last_referenced DESC""",
-            (user_id, min_importance)
-        )
-        rows = await cursor.fetchall()
-        beliefs = []
-        for row in rows:
-            belief = dict(row)
-            belief['topics'] = belief['topics'].split(',') if belief['topics'] else []
-            beliefs.append(belief)
-        return beliefs
-
-
-async def add_conversation_message(
-    user_id: str,
-    role: str,
-    content: str,
-    channel_id: str = None,
-    message_id: str = None
-):
-    """Store a conversation message for context."""
-    msg_id = str(uuid.uuid4())
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """INSERT INTO conversations (id, user_id, channel_id, message_id, role, content)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (msg_id, user_id, channel_id, message_id, role, content)
-        )
-        await db.commit()
-
-
-async def get_recent_conversation(user_id: str, limit: int = 20) -> list[dict]:
-    """Get recent conversation history for a user."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """SELECT role, content, timestamp FROM conversations
-               WHERE user_id = ?
-               ORDER BY timestamp DESC
-               LIMIT ?""",
-            (user_id, limit)
-        )
-        messages = [dict(row) for row in await cursor.fetchall()]
-        return list(reversed(messages))  # Oldest first
-
+# ============================================
+# BELIEF EVOLUTION & TENSIONS
+# ============================================
 
 async def record_belief_evolution(
     belief_id: str,
@@ -668,306 +648,350 @@ async def get_recent_changes(user_id: str, days: int = 30) -> list[dict]:
         return [dict(row) for row in await cursor.fetchall()]
 
 
-async def update_belief_confidence(belief_id: str, user_id: str, new_confidence: float, trigger: str = None) -> bool:
-    """Update a belief's confidence and record the evolution."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        # Get current confidence
-        cursor = await db.execute(
-            "SELECT confidence FROM beliefs WHERE id = ? AND user_id = ? AND is_deleted = 0",
-            (belief_id, user_id)
-        )
-        row = await cursor.fetchone()
-        if not row:
-            return False
-
-        old_confidence = row['confidence']
-
-        # Update the belief
-        await db.execute(
-            "UPDATE beliefs SET confidence = ?, last_referenced = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_confidence, belief_id)
-        )
-        await db.commit()
-
-    # Record evolution
-    await record_belief_evolution(
-        belief_id=belief_id,
-        old_confidence=old_confidence,
-        new_confidence=new_confidence,
-        trigger=trigger
-    )
-    return True
-
-
-async def create_comparison_request(requester_id: str, target_id: str) -> dict:
-    """Create a comparison request between two users."""
-    request_id = str(uuid.uuid4())
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Check if there's already a pending request
-        cursor = await db.execute(
-            """SELECT id FROM comparison_requests
-               WHERE requester_id = ? AND target_id = ? AND status = 'pending'""",
-            (requester_id, target_id)
-        )
-        existing = await cursor.fetchone()
-        if existing:
-            return {"id": existing[0], "status": "already_pending"}
-
-        await db.execute(
-            """INSERT INTO comparison_requests (id, requester_id, target_id)
-               VALUES (?, ?, ?)""",
-            (request_id, requester_id, target_id)
-        )
-        await db.commit()
-
-    return {"id": request_id, "status": "created"}
-
-
-async def get_pending_requests(user_id: str) -> list[dict]:
-    """Get pending comparison requests for a user (where they are the target)."""
+async def get_all_tensions(user_id: str) -> list[dict]:
+    """Get all contradicting belief pairs for a user."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            """SELECT cr.*, u.username as requester_username
-               FROM comparison_requests cr
-               JOIN users u ON cr.requester_id = u.user_id
-               WHERE cr.target_id = ? AND cr.status = 'pending'
-               ORDER BY cr.requested_at DESC""",
+            """SELECT br.*,
+                      b1.statement as source_statement, b1.confidence as source_confidence,
+                      b1.importance as source_importance, b1.id as source_id,
+                      b2.statement as target_statement, b2.confidence as target_confidence,
+                      b2.importance as target_importance, b2.id as target_id
+               FROM belief_relations br
+               JOIN beliefs b1 ON br.source_id = b1.id
+               JOIN beliefs b2 ON br.target_id = b2.id
+               WHERE b1.user_id = ?
+                 AND br.relation_type = 'contradicts'
+                 AND b1.is_deleted = 0
+                 AND b2.is_deleted = 0
+               ORDER BY br.strength DESC, b1.importance DESC""",
             (user_id,)
         )
         return [dict(row) for row in await cursor.fetchall()]
 
 
-async def respond_to_comparison(request_id: str, user_id: str, accept: bool) -> bool:
-    """Accept or decline a comparison request."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            """UPDATE comparison_requests
-               SET status = ?, responded_at = CURRENT_TIMESTAMP
-               WHERE id = ? AND target_id = ? AND status = 'pending'""",
-            ('accepted' if accept else 'declined', request_id, user_id)
-        )
-        await db.commit()
-        return cursor.rowcount > 0
-
-
-async def get_comparison_request(request_id: str) -> Optional[dict]:
-    """Get a specific comparison request."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM comparison_requests WHERE id = ?",
-            (request_id,)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-
-async def get_shareable_beliefs(user_id: str) -> list[dict]:
-    """Get beliefs that can be shared in comparisons (not private/hidden)."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """SELECT b.*, GROUP_CONCAT(bt.topic) as topics_str
-               FROM beliefs b
-               LEFT JOIN belief_topics bt ON b.id = bt.belief_id
-               WHERE b.user_id = ? AND b.is_deleted = 0
-                 AND b.visibility IN ('public', 'shareable')
-               GROUP BY b.id
-               ORDER BY b.importance DESC, b.confidence DESC""",
-            (user_id,)
-        )
-        rows = await cursor.fetchall()
-        beliefs = []
-        for row in rows:
-            belief = dict(row)
-            belief['topics'] = belief['topics_str'].split(',') if belief['topics_str'] else []
-            del belief['topics_str']
-            beliefs.append(belief)
-        return beliefs
-
-
-async def get_accepted_comparison(requester_id: str, target_id: str) -> Optional[dict]:
-    """Check if there's an accepted comparison between two users."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """SELECT * FROM comparison_requests
-               WHERE ((requester_id = ? AND target_id = ?)
-                  OR (requester_id = ? AND target_id = ?))
-                 AND status = 'accepted'
-               ORDER BY responded_at DESC
-               LIMIT 1""",
-            (requester_id, target_id, target_id, requester_id)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-
-async def store_comparison_result(
-    request_id: str,
-    user_a_id: str,
-    user_b_id: str,
-    overall_similarity: float,
-    core_similarity: float,
-    agreement_count: int,
-    difference_count: int,
-    bridging_beliefs: list[dict] = None
-) -> str:
-    """Store comparison results for bridging score calculation."""
-    result_id = str(uuid.uuid4())
+async def add_belief_relation(
+    source_id: str,
+    target_id: str,
+    relation_type: str,
+    strength: float = 1.0
+):
+    """Add a relation between two beliefs."""
+    relation_id = str(uuid.uuid4())
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            """INSERT INTO comparison_results
-               (id, request_id, user_a_id, user_b_id, overall_similarity,
-                core_similarity, agreement_count, difference_count)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (result_id, request_id, user_a_id, user_b_id, overall_similarity,
-             core_similarity, agreement_count, difference_count)
+            """INSERT OR REPLACE INTO belief_relations
+               (id, source_id, target_id, relation_type, strength)
+               VALUES (?, ?, ?, ?, ?)""",
+            (relation_id, source_id, target_id, relation_type, strength)
         )
-
-        # Store bridging beliefs (agreements despite low overall similarity)
-        if bridging_beliefs and overall_similarity < 0.5:
-            for bb in bridging_beliefs:
-                bb_id = str(uuid.uuid4())
-                await db.execute(
-                    """INSERT INTO bridging_beliefs
-                       (id, comparison_id, belief_id, matched_with_belief_id, user_id)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (bb_id, result_id, bb['belief_id'], bb.get('matched_id'), bb['user_id'])
-                )
-
         await db.commit()
 
-    return result_id
+
+# ============================================
+# BELIEF VALUES
+# ============================================
+
+async def add_belief_values(
+    belief_id: str,
+    values: list[tuple[str, float, float]]  # (value_name, weight, mapping_confidence)
+):
+    """Add value mappings for a belief."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        for value_name, weight, mapping_confidence in values:
+            await db.execute(
+                """INSERT OR REPLACE INTO belief_values
+                   (belief_id, value_name, weight, mapping_confidence)
+                   VALUES (?, ?, ?, ?)""",
+                (belief_id, value_name, weight, mapping_confidence)
+            )
+        await db.commit()
 
 
-async def get_bridging_score(user_id: str) -> dict:
-    """Calculate bridging score based on comparison history."""
+async def get_belief_value_mappings(user_id: str) -> list[BeliefValueMapping]:
+    """Get all belief-value mappings for a user (for profile calculation)."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
-        # Get all comparisons involving this user
         cursor = await db.execute(
-            """SELECT * FROM comparison_results
-               WHERE user_a_id = ? OR user_b_id = ?
-               ORDER BY computed_at DESC""",
-            (user_id, user_id)
-        )
-        comparisons = [dict(row) for row in await cursor.fetchall()]
-
-        if not comparisons:
-            return {
-                "score": 0,
-                "comparisons_count": 0,
-                "bridging_comparisons": 0,
-                "bridging_beliefs": [],
-                "message": "No comparisons yet. Use /compare to start."
-            }
-
-        # Count comparisons with low similarity but some agreements
-        bridging_comparisons = 0
-        total_agreements_with_different = 0
-
-        for comp in comparisons:
-            if comp['overall_similarity'] < 0.5 and comp['agreement_count'] > 0:
-                bridging_comparisons += 1
-                total_agreements_with_different += comp['agreement_count']
-
-        # Get bridging beliefs for this user
-        cursor = await db.execute(
-            """SELECT bb.*, b.statement, b.importance
-               FROM bridging_beliefs bb
-               JOIN beliefs b ON bb.belief_id = b.id
-               WHERE bb.user_id = ?
-               ORDER BY b.importance DESC
-               LIMIT 10""",
+            """SELECT b.id, b.statement, b.confidence, b.first_expressed,
+                      bv.value_name, bv.weight, bv.mapping_confidence
+               FROM beliefs b
+               JOIN belief_values bv ON b.id = bv.belief_id
+               WHERE b.user_id = ?
+                 AND b.is_deleted = 0
+                 AND b.include_in_values = 1
+               ORDER BY b.id""",
             (user_id,)
         )
-        bridging_beliefs = [dict(row) for row in await cursor.fetchall()]
 
-        # Calculate score
-        if len(comparisons) == 0:
-            score = 0
-        else:
-            # Score based on: % of comparisons that had bridging + avg agreements
-            bridging_ratio = bridging_comparisons / len(comparisons)
-            avg_agreements = total_agreements_with_different / max(bridging_comparisons, 1)
-            score = min(1.0, (bridging_ratio * 0.6) + (min(avg_agreements, 5) / 5 * 0.4))
+        rows = await cursor.fetchall()
 
-        return {
-            "score": score,
-            "comparisons_count": len(comparisons),
-            "bridging_comparisons": bridging_comparisons,
-            "bridging_beliefs": bridging_beliefs,
-            "total_bridging_agreements": total_agreements_with_different
-        }
+        # Group by belief
+        belief_map = {}
+        for row in rows:
+            bid = row['id']
+            if bid not in belief_map:
+                belief_map[bid] = BeliefValueMapping(
+                    belief_id=bid,
+                    belief_statement=row['statement'],
+                    belief_confidence=row['confidence'],
+                    belief_timestamp=row['first_expressed'],
+                    values=[]
+                )
+            belief_map[bid].values.append((
+                row['value_name'],
+                row['weight'],
+                row['mapping_confidence']
+            ))
+
+        return list(belief_map.values())
 
 
-async def set_belief_visibility(belief_id: str, user_id: str, visibility: str) -> bool:
-    """Set the visibility level of a belief."""
-    valid_levels = ('public', 'shareable', 'private', 'hidden')
-    if visibility not in valid_levels:
-        return False
+# ============================================
+# USER VALUES
+# ============================================
+
+async def update_user_value_profile(user_id: str) -> ValueProfile:
+    """Recalculate and store user's value profile."""
+    mappings = await get_belief_value_mappings(user_id)
+    aggregated = aggregate_value_profile(mappings)
 
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "UPDATE beliefs SET visibility = ? WHERE id = ? AND user_id = ? AND is_deleted = 0",
-            (visibility, belief_id, user_id)
-        )
+        now = datetime.now().isoformat()
+
+        for value_name, (raw_score, normalized_score, belief_count) in aggregated.items():
+            await db.execute(
+                """INSERT OR REPLACE INTO user_values
+                   (user_id, value_name, score, raw_score, belief_count, last_updated)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_id, value_name, normalized_score, raw_score, belief_count, now)
+            )
+
         await db.commit()
-        return cursor.rowcount > 0
+
+    return await get_user_value_profile(user_id)
 
 
-async def set_topic_visibility(user_id: str, topic: str, visibility: str) -> int:
-    """Set visibility for all beliefs with a given topic. Returns count updated."""
-    valid_levels = ('public', 'shareable', 'private', 'hidden')
-    if visibility not in valid_levels:
-        return 0
-
+async def get_user_value_profile(user_id: str) -> ValueProfile:
+    """Get user's current value profile."""
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            """UPDATE beliefs SET visibility = ?
-               WHERE id IN (
-                   SELECT b.id FROM beliefs b
-                   JOIN belief_topics bt ON b.id = bt.belief_id
-                   WHERE b.user_id = ? AND bt.topic = ? AND b.is_deleted = 0
-               )""",
-            (visibility, user_id, topic.lower())
-        )
-        await db.commit()
-        return cursor.rowcount
+        db.row_factory = aiosqlite.Row
 
-
-async def get_visibility_breakdown(user_id: str) -> dict:
-    """Get count of beliefs by visibility level."""
-    async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            """SELECT visibility, COUNT(*) as count
-               FROM beliefs
-               WHERE user_id = ? AND is_deleted = 0
-               GROUP BY visibility""",
+            "SELECT * FROM user_values WHERE user_id = ?",
             (user_id,)
         )
         rows = await cursor.fetchall()
-        breakdown = {'public': 0, 'shareable': 0, 'private': 0, 'hidden': 0}
+
+        scores = {}
+        last_updated = None
+
         for row in rows:
-            if row[0] in breakdown:
-                breakdown[row[0]] = row[1]
-        return breakdown
+            scores[row['value_name']] = ValueScore(
+                value_name=row['value_name'],
+                raw_score=row['raw_score'],
+                normalized_score=row['score'],
+                belief_count=row['belief_count'],
+                last_updated=row['last_updated']
+            )
+            if row['last_updated']:
+                last_updated = row['last_updated']
+
+        # Fill in missing values with zeros
+        for value_name in ALL_VALUES:
+            if value_name not in scores:
+                scores[value_name] = ValueScore(
+                    value_name=value_name,
+                    raw_score=0.0,
+                    normalized_score=0.0,
+                    belief_count=0
+                )
+
+        return ValueProfile(
+            user_id=user_id,
+            scores=scores,
+            last_updated=last_updated
+        )
 
 
-async def get_all_topics(user_id: str) -> list[str]:
-    """Get all unique topics for a user's beliefs."""
+async def create_value_snapshot(user_id: str) -> str:
+    """Create a snapshot of user's current value profile."""
+    profile = await get_user_value_profile(user_id)
+
+    values_json = json.dumps({
+        v: profile.scores[v].normalized_score
+        for v in ALL_VALUES
+    })
+
+    snapshot_id = str(uuid.uuid4())
+
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO value_snapshots (id, user_id, snapshot_date, values_json)
+               VALUES (?, ?, ?, ?)""",
+            (snapshot_id, user_id, datetime.now().date().isoformat(), values_json)
+        )
+        await db.commit()
+
+    return snapshot_id
+
+
+async def get_value_snapshot(user_id: str, days_ago: int = 30) -> Optional[ValueProfile]:
+    """Get a historical value snapshot."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        target_date = (datetime.now() - timedelta(days=days_ago)).date().isoformat()
+
         cursor = await db.execute(
-            """SELECT DISTINCT bt.topic FROM belief_topics bt
-               JOIN beliefs b ON bt.belief_id = b.id
-               WHERE b.user_id = ? AND b.is_deleted = 0
-               ORDER BY bt.topic""",
+            """SELECT * FROM value_snapshots
+               WHERE user_id = ? AND snapshot_date <= ?
+               ORDER BY snapshot_date DESC LIMIT 1""",
+            (user_id, target_date)
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            return None
+
+        values_dict = json.loads(row['values_json'])
+
+        scores = {}
+        for value_name, score in values_dict.items():
+            scores[value_name] = ValueScore(
+                value_name=value_name,
+                raw_score=0.0,  # Not stored in snapshot
+                normalized_score=score,
+                belief_count=0,  # Not stored in snapshot
+                last_updated=row['snapshot_date']
+            )
+
+        return ValueProfile(
+            user_id=user_id,
+            scores=scores,
+            last_updated=row['snapshot_date']
+        )
+
+
+# ============================================
+# CONVERSATIONS
+# ============================================
+
+async def add_conversation_message(
+    user_id: str,
+    role: str,
+    content: str,
+    session_id: str = None,
+    channel_id: str = None,
+    message_id: str = None
+):
+    """Store a conversation message."""
+    msg_id = str(uuid.uuid4())
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO conversations
+               (id, user_id, session_id, channel_id, message_id, role, content)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (msg_id, user_id, session_id, channel_id, message_id, role, content)
+        )
+        await db.commit()
+
+
+async def get_session_conversation(session_id: str) -> list[dict]:
+    """Get all messages from a session."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT role, content, timestamp FROM conversations
+               WHERE session_id = ?
+               ORDER BY timestamp""",
+            (session_id,)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_recent_conversation(user_id: str, limit: int = 20) -> list[dict]:
+    """Get recent conversation history for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT role, content, timestamp FROM conversations
+               WHERE user_id = ?
+               ORDER BY timestamp DESC
+               LIMIT ?""",
+            (user_id, limit)
+        )
+        messages = [dict(row) for row in await cursor.fetchall()]
+        return list(reversed(messages))
+
+
+# ============================================
+# DATA EXPORT / CLEAR
+# ============================================
+
+async def export_user_data(user_id: str) -> dict:
+    """Export all user data."""
+    user = await get_or_create_user(user_id)
+    beliefs = await get_user_beliefs(user_id, include_deleted=True)
+    profile = await get_user_value_profile(user_id)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Sessions
+        cursor = await db.execute(
+            "SELECT * FROM journal_sessions WHERE user_id = ?", (user_id,)
+        )
+        sessions = [dict(row) for row in await cursor.fetchall()]
+
+        # Conversations
+        cursor = await db.execute(
+            "SELECT * FROM conversations WHERE user_id = ? ORDER BY timestamp",
             (user_id,)
         )
-        return [row[0] for row in await cursor.fetchall()]
+        conversations = [dict(row) for row in await cursor.fetchall()]
+
+        # Value snapshots
+        cursor = await db.execute(
+            "SELECT * FROM value_snapshots WHERE user_id = ?", (user_id,)
+        )
+        snapshots = [dict(row) for row in await cursor.fetchall()]
+
+    return {
+        "user": user,
+        "beliefs": beliefs,
+        "value_profile": {
+            v: {
+                "score": profile.scores[v].normalized_score,
+                "raw_score": profile.scores[v].raw_score,
+                "belief_count": profile.scores[v].belief_count
+            }
+            for v in ALL_VALUES
+        },
+        "sessions": sessions,
+        "conversations": conversations,
+        "value_snapshots": snapshots,
+        "exported_at": datetime.now().isoformat()
+    }
+
+
+async def clear_all_user_data(user_id: str) -> bool:
+    """Delete all data for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Order matters due to foreign keys
+        await db.execute("DELETE FROM belief_values WHERE belief_id IN (SELECT id FROM beliefs WHERE user_id = ?)", (user_id,))
+        await db.execute("DELETE FROM belief_topics WHERE belief_id IN (SELECT id FROM beliefs WHERE user_id = ?)", (user_id,))
+        await db.execute("DELETE FROM belief_relations WHERE source_id IN (SELECT id FROM beliefs WHERE user_id = ?)", (user_id,))
+        await db.execute("DELETE FROM belief_evolution WHERE belief_id IN (SELECT id FROM beliefs WHERE user_id = ?)", (user_id,))
+        await db.execute("DELETE FROM beliefs WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM journal_sessions WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM user_values WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM value_snapshots WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        await db.commit()
+        return True

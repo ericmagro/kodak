@@ -1,120 +1,118 @@
 # Kodak
 
-A Discord bot that maps your belief network through engaging conversation.
+A Discord bot that helps you understand yourself through daily journaling.
 
-Kodak has natural, curious conversations with you—and along the way, builds a map of what you believe and why. Think of it like a mirror for your mind.
+Kodak is a reflective journaling companion. Each day at a time you choose, it checks in with a thoughtful prompt. Through natural conversation, it helps you explore what's on your mind—and over time, surfaces patterns in what you value.
 
 ## What It Does
 
-- **Extracts beliefs** from natural conversation (you don't have to do anything special)
-- **Tracks confidence levels** based on how certain you sound
-- **Lets you mark importance** — distinguish core beliefs from passing thoughts
-- **Finds connections** between your beliefs over time
-- **Lets you explore** your belief map with `/map` and `/explore [topic]`
-- **Lets you share** — create snapshots of your beliefs to discuss with others
-- **Respects privacy** — all data is per-user, you can pause, export, or delete anytime
+- **Daily check-ins** at a time you choose (evening works best for most people)
+- **Adaptive sessions** that follow your energy—quick check-ins or deep exploration
+- **Extracts beliefs** from your reflections (you don't have to do anything special)
+- **Derives values** using Schwartz's 10 Basic Human Values framework
+- **Tracks change** — see how your values shift over weeks and months
+- **Enables comparison** — share your value profile with friends to see how you align
 
-## Reading Your Belief Map
+## The Session Flow
 
-### Confidence Indicators
+When Kodak checks in, a typical session looks like:
 
-Each belief shows a confidence level based on how certain you sounded:
+1. **Opener** — A thoughtful prompt to get you reflecting
+2. **Exploration** — Follow-up questions that go deeper (adapts to your response length)
+3. **Closure** — A gentle wrap-up, sometimes surfacing beliefs it noticed
 
-```
-[●●●●●] 100% — Very certain ("I absolutely believe...")
-[●●●●○]  80% — Confident ("I think...", stated directly)
-[●●●○○]  60% — Moderate ("I feel like...", "probably...")
-[●●○○○]  40% — Tentative ("maybe...", "I'm not sure but...")
-[●○○○○]  20% — Uncertain ("I guess...", implied beliefs)
-```
-
-### Importance Indicators
-
-Mark how important each belief is to you with `/mark`:
-
-```
-★★★★★ Core (5)       — Foundational to who you are
-★★★★☆ High (4)       — Very important, rarely changes
-★★★☆☆ Medium (3)     — Significant but flexible (default)
-★★☆☆☆ Low (2)        — Opinions you hold loosely
-★☆☆☆☆ Peripheral (1) — Passing thoughts, trivia
-```
-
-Use `/core` to see only your most important beliefs (★★★★+).
-
-### The Map View
-
-When you run `/map`, you'll see beliefs grouped by topic:
-
-```
-──────────────────────────────
-  CAREER
-──────────────────────────────
-  [●●●●○] Your belief statement here...
-```
-
-Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the raw list with IDs.
+Sessions adapt: share a lot and Kodak will explore further; keep it brief and it wraps up quickly.
 
 ## Commands
 
+### Scheduling
 | Command | Description |
 |---------|-------------|
-| `/help` | See all commands |
-| `/map` | View your belief map |
-| `/explore [topic]` | Dive into beliefs about a topic |
-| `/beliefs` | Raw list with IDs and importance |
-| `/belief [id]` | View one belief with its connections |
-| `/core` | Show only important beliefs (★★★★+) |
-| `/tensions` | Show beliefs that might contradict each other |
-| `/history [id]` | See how a belief has evolved over time |
-| `/changes` | See beliefs that changed recently |
-| `/mark [id] [1-5]` | Set how important a belief is |
-| `/confidence [id] [1-5]` | Update how certain you are in a belief |
-| `/share` | Create shareable snapshot of your beliefs |
-| `/share-export` | Export shareable beliefs as file |
-| `/compare-file` | Compare with someone's exported file |
-| `/bridging` | See your bridging score |
-| `/privacy` | Control which beliefs are shareable |
+| `/schedule [time]` | Set your daily check-in time |
+| `/skip` | Skip today's check-in |
+| `/pause` | Pause all check-ins |
+| `/resume` | Resume check-ins |
+| `/journal` | Start a session right now |
+| `/timezone [tz]` | Set your timezone |
+
+### Personality
+| Command | Description |
+|---------|-------------|
 | `/setup` | Choose a personality preset |
-| `/style` | Fine-tune personality (warmth, directness, playfulness, formality) |
-| `/forget [id]` | Delete a belief (use `last` for most recent) |
-| `/undo` | Restore the last forgotten belief |
-| `/pause` | Pause belief tracking |
-| `/resume` | Resume tracking |
-| `/export` | Download all your data as JSON |
-| `/backup` | Download database backup file |
+| `/depth` | Set session depth (quick/standard/deep) |
+| `/style` | View your personality dimensions |
+
+### Beliefs
+| Command | Description |
+|---------|-------------|
+| `/map` | View your belief map by topic |
+| `/beliefs` | Raw list with IDs |
+| `/belief [id]` | View one belief in detail |
+| `/explore [topic]` | Dive into beliefs about a topic |
+| `/core` | Show your most important beliefs |
+
+### Edit Beliefs
+| Command | Description |
+|---------|-------------|
+| `/confidence [id] [level]` | Update how certain you are |
+| `/mark [id] [1-5]` | Set how important a belief is |
+| `/forget [id]` | Delete a belief |
+| `/undo` | Restore last deleted belief |
+
+### History & Analysis
+| Command | Description |
+|---------|-------------|
+| `/history [id]` | See how a belief has evolved |
+| `/changes [days]` | See beliefs that changed recently |
+| `/tensions` | Show potentially conflicting beliefs |
+
+### Values
+| Command | Description |
+|---------|-------------|
+| `/values` | See your value profile |
+| `/values-history` | See how values shifted over time |
+| `/share-values` | Export your values to share |
+| `/compare-file` | Compare with someone's export |
+
+### Privacy & Data
+| Command | Description |
+|---------|-------------|
+| `/export` | Download all your data (JSON) |
+| `/backup` | Download database file |
 | `/clear` | Delete everything |
 
 ## Personality Presets
 
-- 🏛️ **The Philosopher** — Thoughtful and probing
-- 💛 **The Best Friend** — Warm and honest
-- 🔬 **The Scientist** — Precise and analytical
-- 🃏 **The Trickster** — Playful and irreverent
-- 🌿 **The Therapist** — Empathetic and safe
+Choose how Kodak shows up in your conversations:
 
-## Design Philosophy: Honest Engagement
+- **The Philosopher** — Thoughtful, probing, asks "why"
+- **The Best Friend** — Warm, honest, supportive
+- **The Scientist** — Precise, analytical, evidence-focused
+- **The Trickster** — Playful, irreverent, challenges assumptions
+- **The Therapist** — Empathetic, safe, never pushes
 
-Kodak is designed to be warm but never sycophantic. This is intentional.
+## Values Framework
 
-Many AI chatbots default to excessive validation ("That's a great point!", "What a fascinating perspective!"). We deliberately designed against this. Research shows sycophantic AI makes users *more confident they're right* even when wrong, and *less open* to other viewpoints.
+Kodak uses Schwartz's 10 Basic Human Values to understand what matters to you:
 
-Kodak takes a different approach, inspired by:
-- **Adam Grant's "disagreeable givers"** — people who challenge because they care
-- **Kim Scott's Radical Candor** — care personally AND challenge directly
-- **Carl Rogers** — genuineness is essential alongside warmth
+| Value | Description |
+|-------|-------------|
+| Universalism | Tolerance, social justice, equality |
+| Benevolence | Helpfulness, honesty, loyalty to close others |
+| Tradition | Respect for customs, humility |
+| Conformity | Obedience, self-discipline, politeness |
+| Security | Safety, stability, social order |
+| Achievement | Success, competence, ambition |
+| Power | Authority, wealth, recognition |
+| Self-Direction | Creativity, freedom, independence |
+| Stimulation | Excitement, novelty, challenge |
+| Hedonism | Pleasure, enjoying life |
 
-What this means:
-- The bot accepts *you* fully, while questioning your *ideas* freely
-- If something seems contradictory, it'll say so
-- If it disagrees, it'll share why
-- It won't praise just to be nice
-
-This makes conversations more real and the belief map more accurate.
+Your beliefs are tagged with relevant values, and over time Kodak builds a profile of what you prioritize.
 
 ## Run Your Own
 
-Kodak is designed to run locally on your computer. Your data stays on your machine, and you control everything.
+Kodak is designed to run locally on your computer. Your data stays on your machine.
 
 **You'll need:**
 - Python 3.12+
@@ -123,77 +121,35 @@ Kodak is designed to run locally on your computer. Your data stays on your machi
 
 **Quick start:**
 ```bash
-git clone https://github.com/ericmagro/kodak.git
+git clone https://github.com/yourusername/kodak.git
 cd kodak
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your tokens
-cd src && python bot.py
+python src/bot.py
 ```
 
 **[Full setup guide →](SETUP.md)**
 
-Step-by-step instructions for Discord bot creation, API keys, Windows/Mac/Linux, and troubleshooting.
-
 ## Cost
 
-Each message costs ~$0.01-0.02 (Anthropic API). A good conversation session might cost $0.10-0.50.
+Each message costs ~$0.01-0.02 (Anthropic API). A typical daily session might cost $0.05-0.20.
 
 ## Privacy
 
 - All data stored locally in `kodak.db` on your computer
-- Only you can see your beliefs
+- Journal entries never leave your machine
+- Value exports only include what you choose to share
 - `/pause` to chat without tracking
 - `/export` to download your data
 - `/clear` to delete everything
 
-Your beliefs never leave your machine.
+## Design Philosophy
 
-## Where This Is Going
+Kodak is designed to be a genuine companion, not a sycophant. It won't validate everything you say—it'll engage honestly, notice contradictions, and sometimes disagree.
 
-Right now, Kodak is a Discord bot that maps your beliefs through conversation. But that's just the start.
-
-### The Problem
-
-Most technology makes us *more* certain we're right. Algorithms feed us content we already agree with. Social media rewards outrage over understanding. We end up in bubbles, talking past each other.
-
-What if technology could do the opposite? What if it could help us actually understand what we believe, why we believe it, and how our thinking connects to (and differs from) others?
-
-### The Vision
-
-**For you personally:**
-- See patterns in your own thinking you couldn't see before
-- Track how your beliefs evolve over years, not just moments
-- Notice your contradictions before someone else points them out
-- Export your belief map to Obsidian/Roam and build on it
-
-**For your relationships:**
-- Actually understand where you and a friend/partner/colleague align and differ
-- Find the few core beliefs causing most of your disagreements
-- Discover unexpected common ground with people you thought were totally different
-
-**For communities:**
-- See what a group *actually* believes, not just who's loudest
-- Find "bridging beliefs" that unite people across divides
-- Have productive disagreements instead of culture war dead-ends
-
-### What's Coming
-
-**Soon:**
-- **Compatibility matching** — Find people who share your values, or who disagree in *interesting* ways (not just trolls)
-- **Web visualization** — See your beliefs as an interactive graph you can explore
-- **Obsidian/Roam export** — Your beliefs as markdown with `[[wiki-links]]`
-
-**Later:**
-- **Community mapping** — What does this server/group actually think?
-- **Bridge-builder tools** — Surface the beliefs that connect people across divides
-- **Scheduled check-ins** — "Six months ago you said X. Still feel that way?"
-- **Steelmanning** — "Here's the strongest case for the opposite of what you believe"
-
-This is a long-term project. Right now it's a bot for personal reflection. But the foundation is designed to grow.
-
-See the full [roadmap and vision](DESIGN.md#roadmap).
+This is intentional. Research shows sycophantic AI makes people more certain and less open. Kodak aims for the opposite: helping you understand yourself more clearly, including the parts that are messy or contradictory.
 
 ## License
 

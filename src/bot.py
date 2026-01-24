@@ -1,543 +1,451 @@
-"""Kodak Discord Bot - Main entry point."""
+"""Kodak v2.0 - Reflective Journaling Companion."""
 
 import os
-import json
-import asyncio
-import random
-import time
-import uuid
 import logging
-from datetime import datetime
-from collections import defaultdict
+import uuid
 import discord
-from discord import app_commands, ui
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+from datetime import datetime
 
-# Configure logging
+from db import (
+    init_db, get_or_create_user, update_user,
+    get_users_for_prompt, get_users_with_missed_prompts,
+    get_users_needing_reengagement, mark_prompt_sent,
+    create_session as db_create_session, get_active_session as db_get_active_session,
+    end_session as db_end_session, update_session,
+    get_user_value_profile, get_value_snapshot, update_user_value_profile,
+    add_belief, add_belief_values, get_user_beliefs, get_belief,
+    get_all_topics, get_beliefs_by_topic, get_important_beliefs,
+    update_belief_confidence, update_belief_importance,
+    soft_delete_belief, restore_belief, get_last_deleted_belief,
+    get_belief_history, get_recent_changes, get_all_tensions,
+    export_user_data, clear_all_user_data
+)
+from scheduler import JournalScheduler, parse_time_input, format_time_display
+from values import (
+    generate_value_narrative, generate_value_change_narrative,
+    export_to_json, parse_import_data, generate_comparison_with_import_narrative,
+    ALL_VALUES, VALUE_DEFINITIONS
+)
+from extractor import (
+    extract_beliefs_and_values, extract_from_session,
+    format_beliefs_for_close, ExtractedBelief
+)
+from prompts import (
+    get_opener, get_closure, get_reengagement_prompt, get_first_session_framing,
+    infer_response_depth, should_probe_more
+)
+from personality import (
+    PRESETS, PRESET_ORDER, get_preset, build_session_system_prompt
+)
+from session import (
+    SessionState, SessionStage, get_active_session, create_session,
+    end_session, has_active_session, determine_next_stage, get_stage_instruction
+)
+from onboarding import OnboardingFlow, get_onboarding_state, clear_onboarding_state
+
+# Load environment
+load_dotenv()
+
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s',
+    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger('kodak')
 
-from db import (
-    init_db, get_or_create_user, update_user_personality,
-    add_belief, get_user_beliefs, get_beliefs_by_topic,
-    soft_delete_belief, restore_belief, add_conversation_message, get_recent_conversation,
-    get_all_topics, complete_onboarding, set_tracking_paused,
-    increment_message_count, reset_message_count, get_recent_beliefs,
-    clear_all_user_data, export_user_data, add_belief_relation,
-    get_belief_relations, get_belief_relations_inverse, get_all_tensions,
-    set_belief_importance, get_beliefs_by_importance,
-    get_belief_history, get_recent_changes, update_belief_confidence,
-    create_comparison_request, get_pending_requests, respond_to_comparison,
-    get_comparison_request, get_shareable_beliefs, get_accepted_comparison,
-    store_comparison_result, get_bridging_score,
-    set_belief_visibility, set_topic_visibility, get_visibility_breakdown
-)
-from extractor import extract_beliefs, generate_response, find_belief_relations, summarize_beliefs, calculate_belief_similarity
-from personality import (
-    build_system_prompt, list_presets, get_preset, PRESETS,
-    CONVERSATION_STARTERS, RETURNING_PROMPTS
-)
-
-load_dotenv()
-
-# Bot setup
+# Discord setup
 intents = discord.Intents.default()
 intents.message_content = True
 intents.dm_messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# How many messages before showing a belief summary
-MESSAGES_BEFORE_SUMMARY = 8
+# Scheduler instance (initialized on ready)
+scheduler: JournalScheduler = None
 
-# Rate limiting: messages per user per hour (0 = unlimited)
-# Default is unlimited; set RATE_LIMIT_PER_HOUR env var to limit
-RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "0"))
-
-# Track message timestamps per user for rate limiting
-user_message_times: dict[str, list[float]] = defaultdict(list)
-_last_cleanup_time: float = 0.0
-_CLEANUP_INTERVAL: float = 3600.0  # Clean up inactive users every hour
-
-# Track last deleted belief per user for /undo functionality
-last_deleted_belief: dict[str, dict] = {}
+# Anthropic client for LLM responses
+anthropic_client = None
 
 
-def _cleanup_inactive_users():
-    """Remove users with no recent messages from rate limit tracking."""
-    global _last_cleanup_time
-    now = time.time()
-    hour_ago = now - 3600
-
-    # Find and remove inactive users
-    inactive_users = [
-        user_id for user_id, timestamps in user_message_times.items()
-        if not timestamps or max(timestamps) < hour_ago
-    ]
-    for user_id in inactive_users:
-        del user_message_times[user_id]
-
-    _last_cleanup_time = now
+def get_anthropic_client():
+    """Lazy-load Anthropic client."""
+    global anthropic_client
+    if anthropic_client is None:
+        import anthropic
+        anthropic_client = anthropic.Anthropic()
+    return anthropic_client
 
 
-def check_rate_limit(user_id: str) -> tuple[bool, int]:
+# ============================================
+# SESSION MANAGEMENT
+# ============================================
+
+async def start_journal_session(
+    channel: discord.DMChannel,
+    user: dict,
+    prompt_type: str = 'scheduled'
+) -> SessionState:
     """
-    Check if user is rate limited.
-    Returns (is_allowed, seconds_until_reset).
+    Start a new journaling session for a user.
+
+    Args:
+        channel: The DM channel
+        user: The user dict from database
+        prompt_type: 'scheduled', 'user_initiated', 'catch_up', 'first'
     """
-    global _last_cleanup_time
+    user_id = user['user_id']
+    personality = user.get('personality_preset', 'best_friend')
+    depth = user.get('prompt_depth', 'standard')
+    is_first = not user.get('first_session_complete', False)
 
-    if RATE_LIMIT_PER_HOUR <= 0:
-        return True, 0
+    # Create session ID
+    session_id = str(uuid.uuid4())
 
-    now = time.time()
-    hour_ago = now - 3600
+    # Create in-memory session state
+    session = create_session(
+        session_id=session_id,
+        user_id=user_id,
+        personality=personality,
+        depth_setting=depth,
+        is_first_session=is_first
+    )
 
-    # Periodic cleanup of inactive users
-    if now - _last_cleanup_time > _CLEANUP_INTERVAL:
-        _cleanup_inactive_users()
+    # Persist to database
+    await db_create_session(
+        session_id=session_id,
+        user_id=user_id,
+        prompt_type=prompt_type if not is_first else 'first'
+    )
 
-    # Clean old timestamps and keep only last hour
-    user_message_times[user_id] = [
-        t for t in user_message_times[user_id] if t > hour_ago
-    ]
+    # Get and send opener
+    opener = get_opener(personality, user_id)
+    session.opener_used = opener
 
-    if len(user_message_times[user_id]) >= RATE_LIMIT_PER_HOUR:
-        # Calculate when oldest message will expire
-        oldest = min(user_message_times[user_id])
-        seconds_until_reset = int(oldest + 3600 - now) + 1
-        return False, seconds_until_reset
+    # Add first session framing if needed
+    if is_first:
+        framing = get_first_session_framing(personality)
+        message = f"{opener}\n\n*{framing}*"
+    else:
+        message = opener
 
-    # Record this message
-    user_message_times[user_id].append(now)
-    return True, 0
+    await channel.send(message)
+    session.add_bot_message(opener)
+    session.stage = SessionStage.ANCHOR  # Move to anchor after opener
 
-
-def confidence_bar(confidence: float) -> str:
-    """Generate a visual confidence bar (●○) from 0.0-1.0 confidence value."""
-    filled = round(confidence * 5)  # Use round() not int() for accurate display
-    return "●" * filled + "○" * (5 - filled)
-
-
-def importance_stars(level: int) -> str:
-    """Generate visual importance stars (★☆) from 1-5 importance level."""
-    level = max(1, min(5, level))  # Clamp to valid range
-    return "★" * level + "☆" * (5 - level)
-
-
-# === Autocomplete Functions ===
-
-async def belief_autocomplete(
-    interaction: discord.Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
-    """Autocomplete for belief IDs - shows statement preview."""
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-
-    choices = []
-    # Always offer "last" as first option
-    if "last".startswith(current.lower()) or not current:
-        choices.append(app_commands.Choice(name="last (most recent belief)", value="last"))
-
-    for b in beliefs[:24]:  # Discord limit is 25 choices
-        belief_id = b['id'][:8]
-        statement = b['statement'][:60]
-        if len(b['statement']) > 60:
-            statement += "..."
-
-        # Filter by current input
-        if current.lower() in belief_id.lower() or current.lower() in b['statement'].lower():
-            # Format: "abc123 - Statement preview..."
-            display = f"{belief_id} - {statement}"
-            if len(display) > 100:  # Discord name limit
-                display = display[:97] + "..."
-            choices.append(app_commands.Choice(name=display, value=belief_id))
-
-        if len(choices) >= 25:
-            break
-
-    return choices[:25]
+    logger.info(f"Started {prompt_type} session {session_id} for user {user_id}")
+    return session
 
 
-async def topic_autocomplete(
-    interaction: discord.Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
-    """Autocomplete for topic names."""
-    topics = await get_all_topics(str(interaction.user.id))
+async def process_session_message(
+    channel: discord.DMChannel,
+    user: dict,
+    message_content: str
+) -> None:
+    """
+    Process a message within an active session.
 
-    choices = []
-    for topic in topics:
-        if current.lower() in topic.lower() or not current:
-            choices.append(app_commands.Choice(name=topic, value=topic))
-        if len(choices) >= 25:
-            break
+    This is the core conversation loop.
+    """
+    user_id = user['user_id']
+    session = get_active_session(user_id)
 
-    return choices
-
-
-# === Onboarding Views ===
-
-class PersonalitySelect(ui.Select):
-    """Dropdown for selecting personality preset."""
-
-    def __init__(self):
-        options = [
-            discord.SelectOption(
-                label=preset["name"],
-                value=key,
-                description=preset["description"][:100],
-                emoji=preset["emoji"]
-            )
-            for key, preset in PRESETS.items()
-        ]
-        super().__init__(
-            placeholder="Choose a personality...",
-            options=options,
-            min_values=1,
-            max_values=1
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        preset_key = self.values[0]
-        preset = PRESETS[preset_key]
-
-        # Save personality
-        await update_user_personality(
-            str(interaction.user.id),
-            warmth=preset["warmth"],
-            playfulness=preset["playfulness"],
-            directness=preset["directness"],
-            formality=preset["formality"]
-        )
-
-        # Show example
-        example = preset["example_exchange"]
-        embed = discord.Embed(
-            title=f"{preset['emoji']} {preset['name']}",
-            description=preset["description"],
-            color=discord.Color.blue()
-        )
-        embed.add_field(
-            name="Here's how I'd respond:",
-            value=f"**You:** {example['user']}\n**Kodak:** {example['bot']}",
-            inline=False
-        )
-
-        # Show extraction mode selection
-        view = ExtractionModeView()
-        await interaction.response.edit_message(
-            content=None,
-            embed=embed,
-            view=view
-        )
-
-
-class PersonalitySelectView(ui.View):
-    """View containing personality dropdown."""
-
-    def __init__(self):
-        super().__init__(timeout=300)
-        self.add_item(PersonalitySelect())
-
-
-class ExtractionModeView(ui.View):
-    """View for selecting extraction mode."""
-
-    def __init__(self):
-        super().__init__(timeout=300)
-
-    @ui.button(label="Active", style=discord.ButtonStyle.primary, emoji="🎯")
-    async def active_mode(self, interaction: discord.Interaction, button: ui.Button):
-        await self._set_mode(interaction, "active")
-
-    @ui.button(label="Chill", style=discord.ButtonStyle.secondary, emoji="🌊")
-    async def passive_mode(self, interaction: discord.Interaction, button: ui.Button):
-        await self._set_mode(interaction, "passive")
-
-    async def _set_mode(self, interaction: discord.Interaction, mode: str):
-        await update_user_personality(str(interaction.user.id), extraction_mode=mode)
-        await complete_onboarding(str(interaction.user.id))
-
-        mode_desc = {
-            "active": "I'll ask follow-up questions to understand you better.",
-            "passive": "I'll mostly listen and let things emerge naturally."
-        }
-
-        # Show conversation starters
-        starters = random.sample(CONVERSATION_STARTERS, 3)
-        starter_text = "\n".join([f"{s['emoji']} *\"{s['prompt']}\"*" for s in starters])
-
-        embed = discord.Embed(
-            title="You're all set!",
-            description=f"**Mode:** {mode.title()} — {mode_desc[mode]}\n\n"
-                       f"Ready when you are. Here are some ways to start:\n\n{starter_text}\n\n"
-                       f"Or just say whatever's on your mind.",
-            color=discord.Color.green()
-        )
-        embed.set_footer(text="Tip: Use /help anytime to see what I can do.")
-
-        await interaction.response.edit_message(embed=embed, view=None)
-
-
-class ConfirmClearView(ui.View):
-    """Confirmation view for clearing all data."""
-
-    def __init__(self):
-        super().__init__(timeout=60)
-
-    @ui.button(label="Yes, delete everything", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
-        await clear_all_user_data(str(interaction.user.id))
-        await interaction.response.edit_message(
-            content="All your data has been deleted. If you message me again, we'll start fresh.",
-            view=None
-        )
-
-    @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.edit_message(
-            content="Cancelled. Your data is safe.",
-            view=None
-        )
-
-
-class ShareExportView(ui.View):
-    """View for confirming shareable belief export."""
-
-    def __init__(self, export_data: dict, filename: str):
-        super().__init__(timeout=300)  # 5 minute timeout
-        self.export_data = export_data
-        self.filename = filename
-
-    @ui.button(label="Download Export", style=discord.ButtonStyle.primary, emoji="📥")
-    async def download(self, interaction: discord.Interaction, button: ui.Button):
-        json_str = json.dumps(self.export_data, indent=2)
-        file = discord.File(
-            fp=__import__('io').BytesIO(json_str.encode()),
-            filename=self.filename
-        )
-        await interaction.response.send_message(
-            "Here's your export file. Send this to someone for comparison.",
-            file=file,
-            ephemeral=True
-        )
-
-    @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.edit_message(
-            content="Export cancelled.",
-            embed=None,
-            view=None
-        )
-
-
-class ComparisonRequestView(ui.View):
-    """View for accepting/declining comparison requests."""
-
-    def __init__(self, request_id: str, requester_id: str, requester_name: str):
-        super().__init__(timeout=86400)  # 24 hour timeout
-        self.request_id = request_id
-        self.requester_id = requester_id
-        self.requester_name = requester_name
-
-    @ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="✓")
-    async def accept(self, interaction: discord.Interaction, button: ui.Button):
-        success = await respond_to_comparison(
-            self.request_id,
-            str(interaction.user.id),
-            accept=True
-        )
-
-        if success:
-            await interaction.response.edit_message(
-                content=f"Accepted! Calculating comparison with {self.requester_name}...",
-                view=None
-            )
-
-            # Calculate and show comparison to both users
-            await show_comparison_results(
-                interaction,
-                self.requester_id,
-                str(interaction.user.id),
-                self.requester_name,
-                interaction.user.display_name,
-                self.request_id
-            )
-        else:
-            await interaction.response.edit_message(
-                content="Something went wrong. The request may have expired.",
-                view=None
-            )
-
-    @ui.button(label="Decline", style=discord.ButtonStyle.secondary, emoji="✗")
-    async def decline(self, interaction: discord.Interaction, button: ui.Button):
-        await respond_to_comparison(
-            self.request_id,
-            str(interaction.user.id),
-            accept=False
-        )
-        await interaction.response.edit_message(
-            content=f"Declined comparison request from {self.requester_name}.",
-            view=None
-        )
-
-
-async def show_comparison_results(
-    interaction: discord.Interaction,
-    user_a_id: str,
-    user_b_id: str,
-    user_a_name: str,
-    user_b_name: str,
-    request_id: str = None
-):
-    """Calculate and display comparison results to both users."""
-    # Get shareable beliefs for both users
-    beliefs_a = await get_shareable_beliefs(user_a_id)
-    beliefs_b = await get_shareable_beliefs(user_b_id)
-
-    if not beliefs_a or not beliefs_b:
-        await interaction.followup.send(
-            "One or both users don't have enough shareable beliefs for comparison.",
-            ephemeral=True
-        )
+    if not session:
+        logger.warning(f"No active session for user {user_id}")
         return
 
-    # Calculate similarity
-    comparison = await calculate_belief_similarity(beliefs_a, beliefs_b)
+    # Infer response depth
+    depth = infer_response_depth(message_content)
+    session.add_user_message(message_content, depth)
 
-    # Store comparison results for bridging score
-    if request_id:
-        # Identify bridging beliefs (agreements despite differences)
-        bridging_beliefs = []
-        if comparison['overall_similarity'] < 0.5:
-            for ag in comparison.get('agreements', []):
-                # Safely get belief IDs (may be missing in imported files)
-                belief_a = ag.get('belief_a', {})
-                belief_b = ag.get('belief_b', {})
-                id_a = belief_a.get('id')
-                id_b = belief_b.get('id')
+    # Update database
+    await update_session(session.session_id, message_count=session.exchange_count)
 
-                # Only add if both beliefs have valid IDs
-                if id_a and id_b:
-                    # Add bridging belief for user A
-                    bridging_beliefs.append({
-                        'belief_id': id_a,
-                        'matched_id': id_b,
-                        'user_id': user_a_id
-                    })
-                    # Add bridging belief for user B
-                    bridging_beliefs.append({
-                        'belief_id': id_b,
-                        'matched_id': id_a,
-                        'user_id': user_b_id
-                    })
-
-        await store_comparison_result(
-            request_id=request_id,
-            user_a_id=user_a_id,
-            user_b_id=user_b_id,
-            overall_similarity=comparison['overall_similarity'],
-            core_similarity=comparison['core_similarity'],
-            agreement_count=len(comparison.get('agreements', [])),
-            difference_count=len(comparison.get('differences', [])),
-            bridging_beliefs=bridging_beliefs
-        )
-
-    # Build result embed
-    overall_pct = int(comparison['overall_similarity'] * 100)
-    core_pct = int(comparison['core_similarity'] * 100)
-
-    embed = discord.Embed(
-        title=f"🔄 Belief Comparison: {user_a_name} ↔ {user_b_name}",
-        color=discord.Color.blue()
-    )
-
-    # Overall scores
-    overall_bar = "█" * (overall_pct // 10) + "░" * (10 - overall_pct // 10)
-    core_bar = "█" * (core_pct // 10) + "░" * (10 - core_pct // 10)
-
-    embed.add_field(
-        name="Similarity Scores",
-        value=f"**Overall:** [{overall_bar}] {overall_pct}%\n"
-              f"**Core beliefs:** [{core_bar}] {core_pct}%",
-        inline=False
-    )
-
-    # Summary
-    if comparison.get('summary'):
-        embed.add_field(
-            name="Summary",
-            value=comparison['summary'],
-            inline=False
-        )
-
-    # Agreements
-    if comparison['agreements']:
-        agreement_text = ""
-        for ag in comparison['agreements'][:3]:
-            stmt_a = ag['belief_a']['statement'][:50]
-            stmt_b = ag['belief_b']['statement'][:50]
-            if len(ag['belief_a']['statement']) > 50:
-                stmt_a += "..."
-            agreement_text += f"🤝 *\"{stmt_a}\"*\n"
-            if ag.get('note'):
-                agreement_text += f"   {ag['note']}\n"
-        embed.add_field(
-            name=f"Agreements ({len(comparison['agreements'])} found)",
-            value=agreement_text or "None found",
-            inline=False
-        )
-
-    # Differences
-    if comparison['differences']:
-        diff_text = ""
-        for df in comparison['differences'][:3]:
-            stmt_a = df['belief_a']['statement'][:40]
-            stmt_b = df['belief_b']['statement'][:40]
-            if len(df['belief_a']['statement']) > 40:
-                stmt_a += "..."
-            if len(df['belief_b']['statement']) > 40:
-                stmt_b += "..."
-            diff_text += f"⚡ *\"{stmt_a}\"* vs *\"{stmt_b}\"*\n"
-            if df.get('note'):
-                diff_text += f"   {df['note']}\n"
-        embed.add_field(
-            name=f"Interesting Differences ({len(comparison['differences'])} found)",
-            value=diff_text or "None found",
-            inline=False
-        )
-
-    embed.set_footer(text="Only shareable beliefs were compared. Use /bridging to see your bridging score.")
-
-    # Send to the user who triggered this (the one who accepted)
-    await interaction.followup.send(embed=embed)
-
-    # Try to DM the requester too
+    # Extract beliefs from this message (async, doesn't block response)
     try:
-        requester = await bot.fetch_user(int(user_a_id))
-        await requester.send(embed=embed)
-    except discord.errors.Forbidden:
-        pass  # Can't DM them
+        existing_beliefs = await get_user_beliefs(user_id, limit=20)
+        extraction = await extract_beliefs_and_values(
+            message=message_content,
+            conversation_context=session.get_recent_context(6),
+            existing_beliefs=existing_beliefs
+        )
+
+        # Store extracted beliefs
+        for belief in extraction.beliefs:
+            stored_belief = await add_belief(
+                user_id=user_id,
+                statement=belief.statement,
+                confidence=belief.confidence,
+                source_type=belief.source_type,
+                session_id=session.session_id,
+                topics=belief.topics
+            )
+
+            # Add value mappings
+            if belief.values:
+                await add_belief_values(
+                    belief_id=stored_belief['id'],
+                    values=[(v.name, v.weight, v.mapping_confidence) for v in belief.values]
+                )
+
+            # Track for session close display
+            session.extracted_beliefs.append(belief.statement)
+
+        if extraction.beliefs:
+            logger.info(f"Extracted {len(extraction.beliefs)} beliefs from user {user_id}")
+
+    except Exception as e:
+        logger.error(f"Extraction error: {e}")
+
+    # Determine next stage
+    next_stage = determine_next_stage(session)
+    session.stage = next_stage
+
+    # Check if we should close
+    if next_stage == SessionStage.CLOSE:
+        await close_session(channel, user, session)
+        return
+
+    # Generate response using LLM
+    response = await generate_session_response(session, message_content)
+
+    if response:
+        await channel.send(response)
+        session.add_bot_message(response)
 
 
-# === Bot Events ===
+async def generate_session_response(session: SessionState, user_message: str) -> str:
+    """Generate a response using the LLM."""
+    try:
+        client = get_anthropic_client()
+
+        # Build system prompt
+        system = build_session_system_prompt(
+            preset_key=session.personality,
+            session_stage=session.stage.value,
+            depth_setting=session.depth_setting,
+            is_first_session=session.is_first_session,
+            exchange_count=session.exchange_count
+        )
+
+        # Add stage instruction
+        stage_instruction = get_stage_instruction(session)
+        system += f"\n\nCurrent instruction: {stage_instruction}"
+
+        # Build messages from session history
+        messages = []
+        for msg in session.get_recent_context(6):
+            messages.append({
+                'role': msg['role'],
+                'content': msg['content']
+            })
+
+        # Add current message if not already in history
+        if not messages or messages[-1]['content'] != user_message:
+            messages.append({'role': 'user', 'content': user_message})
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            system=system,
+            messages=messages
+        )
+
+        return response.content[0].text
+
+    except Exception as e:
+        logger.error(f"Error generating response: {e}")
+        # Fallback to a simple response
+        return "I hear you. Tell me more about that."
+
+
+async def close_session(
+    channel: discord.DMChannel,
+    user: dict,
+    session: SessionState
+) -> None:
+    """Close a session with appropriate closure message."""
+    user_id = user['user_id']
+    personality = session.personality
+
+    # Build closure message
+    closure_parts = []
+
+    # Get base closure
+    closure = get_closure(
+        personality=personality,
+        theme=session.theme_identified,
+        is_first_session=session.is_first_session,
+        is_short_session=session.exchange_count <= 2
+    )
+
+    # Show extracted beliefs (if any and not first session)
+    if session.extracted_beliefs and not session.is_first_session:
+        # Show up to 2 most recent beliefs
+        beliefs_to_show = session.extracted_beliefs[-2:]
+        if len(beliefs_to_show) == 1:
+            closure_parts.append(f"Something worth remembering:\n*\"{beliefs_to_show[0]}\"*")
+        else:
+            closure_parts.append("A couple things worth remembering:")
+            for b in beliefs_to_show:
+                closure_parts.append(f"*\"{b}\"*")
+
+    closure_parts.append(closure)
+
+    await channel.send("\n\n".join(closure_parts))
+
+    # Update value profile
+    try:
+        await update_user_value_profile(user_id)
+        logger.info(f"Updated value profile for user {user_id}")
+    except Exception as e:
+        logger.error(f"Failed to update value profile: {e}")
+
+    # End in-memory session
+    end_session(user_id)
+
+    # Update database
+    await db_end_session(session.session_id)
+
+    # Mark first session complete if applicable
+    if session.is_first_session:
+        await update_user(user_id, first_session_complete=1)
+
+    logger.info(f"Closed session {session.session_id} for user {user_id} ({session.exchange_count} exchanges, {len(session.extracted_beliefs)} beliefs)")
+
+
+# ============================================
+# PROMPT SENDING FUNCTIONS
+# ============================================
+
+async def send_scheduled_prompt(user: dict):
+    """Send a scheduled daily prompt to a user."""
+    try:
+        discord_user = await bot.fetch_user(int(user['user_id']))
+        if not discord_user:
+            logger.warning(f"Could not find Discord user {user['user_id']}")
+            return
+
+        dm_channel = await discord_user.create_dm()
+        await start_journal_session(dm_channel, user, prompt_type='scheduled')
+        logger.info(f"Sent scheduled prompt to {user['user_id']}")
+
+    except discord.Forbidden:
+        logger.warning(f"Cannot DM user {user['user_id']} - DMs may be disabled")
+    except Exception as e:
+        logger.error(f"Error sending prompt to {user['user_id']}: {e}")
+
+
+async def send_catch_up_prompt(user: dict, hours_late: int):
+    """Send a catch-up prompt for a missed scheduled time."""
+    try:
+        discord_user = await bot.fetch_user(int(user['user_id']))
+        if not discord_user:
+            return
+
+        personality = user.get('personality_preset', 'best_friend')
+
+        if hours_late < 2:
+            message = "Hey! Just missed our usual time — want to reflect on your day now?"
+        else:
+            message = (
+                "Hey, I noticed we missed our check-in earlier. "
+                "No worries — want to catch up now, or wait until tomorrow?"
+            )
+
+        dm_channel = await discord_user.create_dm()
+        await dm_channel.send(message)
+        logger.info(f"Sent catch-up prompt to {user['user_id']} ({hours_late}h late)")
+
+    except discord.Forbidden:
+        logger.warning(f"Cannot DM user {user['user_id']}")
+    except Exception as e:
+        logger.error(f"Error sending catch-up to {user['user_id']}: {e}")
+
+
+async def send_reengagement_prompt(user: dict):
+    """Send a re-engagement message to a user who's been away."""
+    try:
+        discord_user = await bot.fetch_user(int(user['user_id']))
+        if not discord_user:
+            return
+
+        personality = user.get('personality_preset', 'best_friend')
+        message = get_reengagement_prompt(personality)
+
+        dm_channel = await discord_user.create_dm()
+        await dm_channel.send(message)
+        logger.info(f"Sent re-engagement to {user['user_id']}")
+
+    except discord.Forbidden:
+        logger.warning(f"Cannot DM user {user['user_id']}")
+    except Exception as e:
+        logger.error(f"Error sending re-engagement to {user['user_id']}: {e}")
+
+
+# ============================================
+# ONBOARDING
+# ============================================
+
+async def handle_onboarding_complete(
+    channel: discord.DMChannel,
+    user_id: str,
+    personality: str,
+    time: str,
+    start_now: bool
+):
+    """Handle completion of onboarding flow."""
+    # Update user in database
+    await update_user(
+        user_id,
+        personality_preset=personality,
+        prompt_time=time,
+        onboarding_complete=1
+    )
+
+    user = await get_or_create_user(user_id)
+
+    if start_now:
+        await start_journal_session(channel, user, prompt_type='first')
+
+    logger.info(f"User {user_id} completed onboarding: {personality}, {time}")
+
+
+# ============================================
+# BOT EVENTS
+# ============================================
 
 @bot.event
 async def on_ready():
-    """Called when bot is ready."""
-    await init_db()
-    logger.info(f"Bot started as {bot.user} (ID: {bot.user.id})")
+    """Bot startup."""
+    global scheduler
 
-    # Sync slash commands
+    logger.info(f"Kodak v2 logged in as {bot.user}")
+
+    # Initialize database
+    await init_db()
+    logger.info("Database initialized")
+
+    # Initialize and start scheduler
+    scheduler = JournalScheduler(
+        get_users_for_prompt=get_users_for_prompt,
+        get_users_with_missed_prompts=get_users_with_missed_prompts,
+        get_users_needing_reengagement=get_users_needing_reengagement,
+        send_scheduled_prompt=send_scheduled_prompt,
+        send_catch_up_prompt=send_catch_up_prompt,
+        send_reengagement_prompt=send_reengagement_prompt,
+        mark_prompt_sent=mark_prompt_sent
+    )
+    await scheduler.start()
+    logger.info("Scheduler started")
+
+    # Sync commands
     try:
         synced = await bot.tree.sync()
-        logger.info(f"Synced {len(synced)} slash commands")
+        logger.info(f"Synced {len(synced)} commands")
     except Exception as e:
         logger.error(f"Failed to sync commands: {e}")
 
@@ -545,364 +453,611 @@ async def on_ready():
 @bot.event
 async def on_message(message: discord.Message):
     """Handle incoming messages."""
-    # Ignore own messages
+    # Ignore bot's own messages
     if message.author == bot.user:
         return
 
-    # Ignore messages that are slash commands
-    if message.content.startswith("/"):
+    # Only handle DMs for v2
+    if not isinstance(message.channel, discord.DMChannel):
         return
 
-    # Check if this is a DM or if bot is mentioned in a channel
-    is_dm = isinstance(message.channel, discord.DMChannel)
-    is_mentioned = bot.user in message.mentions
-
-    # Only respond in DMs or when mentioned
-    if not is_dm and not is_mentioned:
-        return
-
-    context = "DM" if is_dm else f"channel:{message.channel.id}"
-    logger.info(f"Message from user:{message.author.id} in {context}")
-
-    # Check rate limit
-    is_allowed, wait_seconds = check_rate_limit(str(message.author.id))
-    if not is_allowed:
-        logger.info(f"Rate limited user:{message.author.id} (wait {wait_seconds}s)")
-        minutes = wait_seconds // 60
-        await message.reply(
-            f"You've hit the rate limit ({RATE_LIMIT_PER_HOUR} messages/hour). "
-            f"Try again in {minutes + 1} minute{'s' if minutes > 0 else ''}.",
-            mention_author=False
-        )
-        return
-
-    # Remove the mention from the message content
-    content = message.content.replace(f"<@{bot.user.id}>", "").strip()
+    user_id = str(message.author.id)
 
     # Get or create user
-    user = await get_or_create_user(
-        str(message.author.id),
-        message.author.name
-    )
+    user = await get_or_create_user(user_id, message.author.name)
 
-    # Check for natural language commands
-    lower_content = content.lower()
-    if any(phrase in lower_content for phrase in ["show me my map", "show my map", "what do i believe", "my beliefs"]):
-        await handle_map_request(message, user)
-        return
-    if any(phrase in lower_content for phrase in ["pause tracking", "stop tracking", "don't track"]):
-        await set_tracking_paused(str(message.author.id), True)
-        await message.reply("Got it, I've paused belief tracking. We can still chat—I just won't be taking notes. Say 'resume tracking' whenever you're ready.", mention_author=False)
-        return
-    if any(phrase in lower_content for phrase in ["resume tracking", "start tracking"]):
-        await set_tracking_paused(str(message.author.id), False)
-        await message.reply("Tracking resumed! I'll start mapping our conversations again.", mention_author=False)
-        return
-
-    # Handle empty content after mention
-    if not content:
-        if not user.get("onboarding_complete"):
-            await send_onboarding(message)
-        else:
-            starters = random.sample(CONVERSATION_STARTERS, 3)
-            starter_text = "\n".join([f"{s['emoji']} *\"{s['prompt']}\"*" for s in starters])
-            await message.reply(
-                f"{random.choice(RETURNING_PROMPTS)}\n\n{starter_text}",
-                mention_author=False
-            )
-        return
+    # Update last active
+    await update_user(user_id, last_active=datetime.now().isoformat())
 
     # Check if user needs onboarding
-    if not user.get("onboarding_complete"):
-        await send_onboarding(message)
-        return
-
-    async with message.channel.typing():
-        # Get conversation history
-        history = await get_recent_conversation(str(message.author.id))
-
-        # Get existing beliefs for context
-        existing_beliefs = await get_user_beliefs(str(message.author.id))
-
-        # Build system prompt
-        system_prompt = build_system_prompt(
-            user_settings=user,
-            existing_beliefs=existing_beliefs,
-            is_dm=is_dm
-        )
-
-        # Store user message
-        await add_conversation_message(
-            str(message.author.id),
-            "user",
-            content,
-            str(message.channel.id),
-            str(message.id)
-        )
-
-        # Extract beliefs from the message (runs in parallel with response generation)
-        # Skip if tracking is paused
-        extraction_task = None
-        if not user.get("tracking_paused"):
-            extraction_task = asyncio.create_task(
-                extract_beliefs(content, history, existing_beliefs)
-            )
-
-        # Generate response
-        response = await generate_response(content, system_prompt, history)
-
-        # Store assistant message
-        await add_conversation_message(
-            str(message.author.id),
-            "assistant",
-            response
-        )
-
-        # Process extraction results
-        new_beliefs = []
-        if extraction_task:
-            extraction_result = await extraction_task
-            belief_count = len(extraction_result.get("beliefs", []))
-            if belief_count > 0:
-                logger.info(f"Extracted {belief_count} belief(s) from user:{message.author.id}")
-
-            for belief_data in extraction_result.get("beliefs", []):
-                new_belief = await add_belief(
-                    user_id=str(message.author.id),
-                    statement=belief_data["statement"],
-                    confidence=belief_data.get("confidence", 0.5),
-                    source_type=belief_data.get("source_type"),
-                    context=content[:200],
-                    message_id=str(message.id),
-                    channel_id=str(message.channel.id),
-                    topics=belief_data.get("topics", [])
+    if not user.get('onboarding_complete'):
+        # Check if already in onboarding flow
+        state = get_onboarding_state(user_id)
+        if state.selected_personality is None:
+            # Start onboarding
+            flow = OnboardingFlow(
+                channel=message.channel,
+                user_id=user_id,
+                on_complete=lambda p, t, s: handle_onboarding_complete(
+                    message.channel, user_id, p, t, s
                 )
-                new_beliefs.append(new_belief)
-
-                # Find and store relations to existing beliefs
-                relations = await find_belief_relations(new_belief, existing_beliefs)
-                for rel in relations:
-                    await add_belief_relation(
-                        source_id=new_belief["id"],
-                        target_id=rel["target_id"],
-                        relation_type=rel["relation_type"],
-                        strength=rel.get("strength", 0.5)
-                    )
-
-        # Send response
-        await message.reply(response, mention_author=False)
-
-        # Check if we should show a belief summary
-        if not user.get("tracking_paused"):
-            msg_count = await increment_message_count(str(message.author.id))
-            if msg_count >= MESSAGES_BEFORE_SUMMARY and new_beliefs:
-                await send_belief_summary(message, str(message.author.id))
-
-
-async def send_onboarding(message: discord.Message):
-    """Send the onboarding flow to a new user."""
-    embed = discord.Embed(
-        title="Hey! I'm Kodak.",
-        description=(
-            "I'm here to have great conversations with you—and along the way, "
-            "I'll help you build a map of what you believe and why.\n\n"
-            "Think of it like a mirror for your mind. Everything stays private "
-            "to you, and you can delete anything anytime.\n\n"
-            "**First, how would you like me to show up?**"
-        ),
-        color=discord.Color.blue()
-    )
-    embed.set_footer(text="🔒 Your beliefs stay private. Use /forget or /clear anytime.")
-
-    view = PersonalitySelectView()
-    await message.reply(embed=embed, view=view, mention_author=False)
-
-
-async def send_belief_summary(message: discord.Message, user_id: str):
-    """Send a summary of recently captured beliefs."""
-    recent_beliefs = await get_recent_beliefs(user_id, limit=5)
-
-    if not recent_beliefs:
+            )
+            await flow.start()
+        else:
+            # Already in onboarding, remind them
+            await message.channel.send(
+                "Let's finish setting you up first! Use the buttons above to continue."
+            )
         return
 
-    await reset_message_count(user_id)
-
-    belief_lines = []
-    for i, b in enumerate(recent_beliefs[:3], 1):
-        belief_lines.append(f"{i}. {b['statement']}")
-
-    embed = discord.Embed(
-        title="📸 Quick snapshot",
-        description=(
-            "Here's what I've picked up from our recent chat:\n\n"
-            + "\n".join(belief_lines)
-            + "\n\n*Anything off? Use `/forget` or just tell me.*"
-        ),
-        color=discord.Color.light_grey()
-    )
-
-    await message.channel.send(embed=embed)
+    # Check for active session
+    if has_active_session(user_id):
+        await process_session_message(message.channel, user, message.content)
+    else:
+        # No active session - start one (user-initiated)
+        await start_journal_session(message.channel, user, prompt_type='user_initiated')
+        # Process their message as the first response
+        if has_active_session(user_id):
+            await process_session_message(message.channel, user, message.content)
 
 
-async def handle_map_request(message: discord.Message, user: dict):
-    """Handle natural language map request."""
-    beliefs = await get_user_beliefs(str(message.author.id))
+# ============================================
+# COMMANDS
+# ============================================
 
-    if not beliefs:
-        await message.reply(
-            "No beliefs mapped yet. Let's chat and I'll start building your map!",
-            mention_author=False
-        )
-        return
+@bot.tree.command(name="schedule", description="Set your daily check-in time")
+@app_commands.describe(time="Time for daily prompt (e.g., 8pm, 20:00)")
+async def schedule_command(interaction: discord.Interaction, time: str):
+    """Set the user's daily prompt time."""
+    parsed = parse_time_input(time)
 
-    topics = await get_all_topics(str(message.author.id))
-    summary = await summarize_beliefs(beliefs)
-
-    response = f"**Your Belief Map**\n\n"
-    response += f"*{len(beliefs)} beliefs across {len(topics)} topics*\n\n"
-    response += summary
-    response += f"\n\n**Topics:** {', '.join(topics) if topics else 'None yet'}"
-
-    if len(response) > 2000:
-        response = response[:1997] + "..."
-
-    await message.reply(response, mention_author=False)
-
-
-# === Slash Commands ===
-
-@bot.tree.command(name="help", description="Learn what Kodak can do")
-async def help_command(interaction: discord.Interaction):
-    """Show help information."""
-    embed = discord.Embed(
-        title="Kodak Commands",
-        description="I map your beliefs through conversation. Here's what I can do:",
-        color=discord.Color.blue()
-    )
-
-    embed.add_field(
-        name="🗺️ Explore Your Map",
-        value=(
-            "`/map` — See your belief map summarized\n"
-            "`/explore [topic]` — Dive into beliefs about something\n"
-            "`/beliefs` — Raw list with IDs and importance\n"
-            "`/belief [id]` — View one belief with connections\n"
-            "`/core` — Show only your most important beliefs\n"
-            "`/tensions` — Show beliefs that might contradict\n"
-            "`/history [id]` — See how a belief has evolved\n"
-            "`/changes` — See beliefs that changed recently"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="⭐ Importance & Confidence",
-        value=(
-            "`/mark [id] [1-5]` — Set how important a belief is\n"
-            "`/confidence [id] [1-5]` — Update how certain you are\n"
-            "*1=peripheral/uncertain, 5=core/certain*"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="📤 Share & Compare",
-        value=(
-            "`/share` — Create shareable snapshot (view in Discord)\n"
-            "`/share-export` — Export shareable beliefs as file\n"
-            "`/compare-file` — Compare with someone's exported file\n"
-            "`/bridging` — See your bridging score\n"
-            "`/privacy` — Control which beliefs are shareable"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="🎭 Customize Me",
-        value=(
-            "`/setup` — Choose a personality preset\n"
-            "`/style` — Fine-tune personality dimensions"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="🔒 Privacy & Control",
-        value=(
-            "`/forget [id]` — Remove a specific belief\n"
-            "`/undo` — Restore the last forgotten belief\n"
-            "`/pause` — Pause belief tracking\n"
-            "`/resume` — Resume belief tracking\n"
-            "`/export` — Download all your data\n"
-            "`/backup` — Download database backup\n"
-            "`/clear` — Delete everything"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="📊 Reading Confidence",
-        value=(
-            "`[●●●●●]` Certain — `[●●●○○]` Moderate — `[●○○○○]` Tentative"
-        ),
-        inline=False
-    )
-
-    embed.set_footer(text="Command responses are private and disappear after a while. Use /export to save.")
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="setup", description="Choose a personality preset")
-async def setup_command(interaction: discord.Interaction):
-    """Configure the bot's personality with preview."""
-    embed = discord.Embed(
-        title="Choose a Personality",
-        description="Each personality has a different style. Pick one to see an example.",
-        color=discord.Color.blue()
-    )
-
-    view = PersonalitySelectView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-@bot.tree.command(name="map", description="See your belief map")
-async def map_command(interaction: discord.Interaction):
-    """Show the user's belief map."""
-    await interaction.response.defer(ephemeral=True)
-
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-
-    if not beliefs:
-        await interaction.followup.send(
-            "No beliefs mapped yet. Start chatting with me to build your map!",
+    if not parsed:
+        await interaction.response.send_message(
+            f"Couldn't understand '{time}'. Try something like '8pm' or '20:00'.",
             ephemeral=True
         )
         return
 
-    topics = await get_all_topics(str(interaction.user.id))
-    summary = await summarize_beliefs(beliefs)
+    user_id = str(interaction.user.id)
+    await update_user(user_id, prompt_time=parsed)
 
-    # Build ASCII-style visualization
+    display_time = format_time_display(parsed)
+    await interaction.response.send_message(
+        f"Got it! I'll check in with you at **{display_time}** each day.\n\n"
+        f"Use `/schedule` again to change the time, or `/skip` to skip a day.",
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} set schedule to {parsed}")
+
+
+@bot.tree.command(name="skip", description="Skip today's check-in")
+async def skip_command(interaction: discord.Interaction):
+    """Skip today's prompt."""
+    user_id = str(interaction.user.id)
+
+    # Mark today's prompt as "sent" so scheduler won't send it
+    await mark_prompt_sent(user_id)
+
+    await interaction.response.send_message(
+        "No problem, I'll skip today. See you tomorrow!",
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} skipped today's prompt")
+
+
+@bot.tree.command(name="journal", description="Start a journaling session now")
+async def journal_command(interaction: discord.Interaction):
+    """Start an off-schedule journaling session."""
+    user_id = str(interaction.user.id)
+
+    # Check if already in a session
+    if has_active_session(user_id):
+        await interaction.response.send_message(
+            "You're already in a session! Just keep chatting.",
+            ephemeral=True
+        )
+        return
+
+    user = await get_or_create_user(user_id, interaction.user.name)
+
+    if not user.get('onboarding_complete'):
+        await interaction.response.send_message(
+            "Let's get you set up first! Send me any message to start onboarding.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message("Starting a session...", ephemeral=True)
+
+    dm_channel = await interaction.user.create_dm()
+    await start_journal_session(dm_channel, user, prompt_type='user_initiated')
+
+
+@bot.tree.command(name="setup", description="Change your personality preference")
+async def setup_command(interaction: discord.Interaction):
+    """Show personality selection."""
+    user_id = str(interaction.user.id)
+
+    class PersonalitySelect(discord.ui.Select):
+        def __init__(self):
+            options = [
+                discord.SelectOption(
+                    label=PRESETS[key].name,
+                    value=key,
+                    description=PRESETS[key].description[:100]
+                )
+                for key in PRESET_ORDER
+            ]
+            super().__init__(placeholder="Choose a personality...", options=options)
+
+        async def callback(self, select_interaction: discord.Interaction):
+            selected = self.values[0]
+            preset = PRESETS[selected]
+            await update_user(user_id, personality_preset=selected)
+            await select_interaction.response.edit_message(
+                content=f"Updated to **{preset.name}**!\n\n*{preset.journaling_style}*",
+                view=None
+            )
+            logger.info(f"User {user_id} changed personality to {selected}")
+
+    class SetupView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            self.add_item(PersonalitySelect())
+
+    await interaction.response.send_message(
+        "**How should I show up?**\n\n"
+        "Choose a personality that fits how you like to reflect:",
+        view=SetupView(),
+        ephemeral=True
+    )
+
+
+@bot.tree.command(name="depth", description="Set session depth preference")
+@app_commands.describe(level="How deep should sessions go?")
+@app_commands.choices(level=[
+    app_commands.Choice(name="Quick (2-3 exchanges)", value="quick"),
+    app_commands.Choice(name="Standard (4-6 exchanges)", value="standard"),
+    app_commands.Choice(name="Deep (8+ exchanges)", value="deep"),
+])
+async def depth_command(interaction: discord.Interaction, level: str):
+    """Set the user's depth preference."""
+    user_id = str(interaction.user.id)
+    await update_user(user_id, prompt_depth=level)
+
+    descriptions = {
+        'quick': "Quick check-ins, 2-3 exchanges",
+        'standard': "Standard depth, 4-6 exchanges",
+        'deep': "Deep exploration, follow your energy"
+    }
+
+    await interaction.response.send_message(
+        f"Set to **{level}**: {descriptions[level]}.\n\n"
+        f"I'll still adapt based on how much you share.",
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} set depth to {level}")
+
+
+@bot.tree.command(name="values", description="See your value profile")
+async def values_command(interaction: discord.Interaction):
+    """Display the user's value profile."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    profile = await get_user_value_profile(user_id)
+    narrative = generate_value_narrative(profile)
+
+    await interaction.followup.send(narrative, ephemeral=True)
+
+
+@bot.tree.command(name="values-history", description="See how your values have changed")
+async def values_history_command(interaction: discord.Interaction):
+    """Show value changes over time."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+
+    # Get current and historical profiles
+    current_profile = await get_user_value_profile(user_id)
+    month_ago_profile = await get_value_snapshot(user_id, days_ago=30)
+
+    if not month_ago_profile:
+        await interaction.followup.send(
+            "Not enough history yet to show changes.\n\n"
+            "Keep journaling — after a month I'll be able to show how your values are shifting.",
+            ephemeral=True
+        )
+        return
+
+    # Generate change narrative
+    change_narrative = generate_value_change_narrative(
+        current_profile=current_profile,
+        previous_profile=month_ago_profile,
+        period_description="the past month"
+    )
+
+    if not change_narrative:
+        await interaction.followup.send(
+            "Your values have been pretty stable over the past month.\n\n"
+            "No major shifts in what you emphasize.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.followup.send(change_narrative, ephemeral=True)
+
+
+# ============================================
+# VALUE SHARING COMMANDS
+# ============================================
+
+class ShareValuesView(discord.ui.View):
+    """Privacy selection UI for sharing values."""
+
+    def __init__(self, user_id: str, profile, beliefs: list[dict]):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.profile = profile
+        self.beliefs = beliefs
+
+        # Default: include all values, no beliefs
+        self.included_values = set(ALL_VALUES)
+        self.included_beliefs = set()
+        self.display_name = "Anonymous"
+
+    @discord.ui.button(label="Include all values", style=discord.ButtonStyle.primary, row=0)
+    async def include_all_values(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+        self.included_values = set(ALL_VALUES)
+        await interaction.response.send_message(
+            f"All 10 values will be included.",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Only top values", style=discord.ButtonStyle.secondary, row=0)
+    async def only_top_values(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+        top = self.profile.get_top_values(5)
+        self.included_values = {v.value_name for v in top if v.normalized_score > 0.3}
+        names = [VALUE_DEFINITIONS[v]["name"] for v in self.included_values]
+        await interaction.response.send_message(
+            f"Will include: {', '.join(names)}",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Add sample beliefs", style=discord.ButtonStyle.secondary, row=1)
+    async def add_beliefs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+        # Include top 3 most confident beliefs
+        sorted_beliefs = sorted(self.beliefs, key=lambda b: b.get('confidence', 0), reverse=True)
+        self.included_beliefs = {b['statement'] for b in sorted_beliefs[:3]}
+        await interaction.response.send_message(
+            f"Will include {len(self.included_beliefs)} sample beliefs.",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="No beliefs", style=discord.ButtonStyle.secondary, row=1)
+    async def no_beliefs(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+        self.included_beliefs = set()
+        await interaction.response.send_message(
+            "No beliefs will be included.",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Generate file", style=discord.ButtonStyle.success, row=2)
+    async def generate_file(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Generate export
+        json_str = export_to_json(
+            profile=self.profile,
+            display_name=self.display_name,
+            included_values=list(self.included_values),
+            included_beliefs=list(self.included_beliefs)
+        )
+
+        import io
+        file = discord.File(
+            io.BytesIO(json_str.encode()),
+            filename=f"kodak-values-{self.user_id[:8]}.json"
+        )
+
+        await interaction.followup.send(
+            f"Here's your value profile! Share this file with someone who uses Kodak.\n"
+            f"They can use `/compare-file` to see how your values align.",
+            file=file,
+            ephemeral=True
+        )
+
+        self.stop()
+
+
+class NameInputModal(discord.ui.Modal, title="Set Display Name"):
+    """Modal for entering display name."""
+
+    name_input = discord.ui.TextInput(
+        label="How should you appear in the export?",
+        placeholder="Your name or nickname",
+        default="Anonymous",
+        required=True,
+        max_length=50
+    )
+
+    def __init__(self, view: ShareValuesView):
+        super().__init__()
+        self.view = view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        self.view.display_name = self.name_input.value
+        await interaction.response.send_message(
+            f"Display name set to **{self.view.display_name}**",
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="share-values", description="Export your value profile to share")
+async def share_values_command(interaction: discord.Interaction):
+    """Export value profile as shareable JSON with privacy controls."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    profile = await get_user_value_profile(user_id)
+    beliefs = await get_user_beliefs(user_id, limit=20)
+
+    # Check if user has enough data
+    top_values = profile.get_top_values(3)
+    if not top_values or all(v.normalized_score == 0 for v in top_values):
+        await interaction.followup.send(
+            "You don't have enough data to share yet.\n\n"
+            "Keep journaling and I'll build your value profile over time.",
+            ephemeral=True
+        )
+        return
+
+    view = ShareValuesView(user_id, profile, beliefs)
+
+    # Add name input button
+    name_button = discord.ui.Button(label="Set display name", style=discord.ButtonStyle.secondary, row=2)
+    async def name_callback(button_interaction: discord.Interaction):
+        if str(button_interaction.user.id) != user_id:
+            await button_interaction.response.send_message("This isn't your export!", ephemeral=True)
+            return
+        await button_interaction.response.send_modal(NameInputModal(view))
+    name_button.callback = name_callback
+    view.add_item(name_button)
+
+    # Show current top values
+    top_names = [f"**{v.display_name}** ({v.normalized_score:.0%})" for v in top_values[:3] if v.normalized_score > 0.2]
+
+    await interaction.followup.send(
+        "**Share Your Values**\n\n"
+        f"Your top values: {', '.join(top_names)}\n\n"
+        "Choose what to include in your export:\n"
+        "• **Values** — your normalized scores (default: all 10)\n"
+        "• **Beliefs** — sample statements that shaped your values (optional)\n"
+        "• **Display name** — how you appear to the recipient\n\n"
+        "Then click **Generate file** to create your shareable profile.",
+        view=view,
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} started share-values flow")
+
+
+@bot.tree.command(name="compare-file", description="Compare your values with someone's shared file")
+async def compare_file_command(interaction: discord.Interaction, file: discord.Attachment):
+    """Load and compare a shared value profile."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+
+    # Validate file
+    if not file.filename.endswith('.json'):
+        await interaction.followup.send(
+            "Please attach a `.json` file exported from Kodak.",
+            ephemeral=True
+        )
+        return
+
+    if file.size > 100000:  # 100KB max
+        await interaction.followup.send(
+            "File too large. Kodak export files should be small.",
+            ephemeral=True
+        )
+        return
+
+    try:
+        # Download and parse file
+        content = await file.read()
+        json_str = content.decode('utf-8')
+
+        imported = parse_import_data(json_str)
+        if not imported:
+            await interaction.followup.send(
+                "Couldn't read that file. Make sure it's a Kodak value export.\n\n"
+                "Ask your friend to use `/share-values` to create a valid export.",
+                ephemeral=True
+            )
+            return
+
+        # Get user's profile for comparison
+        your_profile = await get_user_value_profile(user_id)
+
+        # Check if user has data
+        top_values = your_profile.get_top_values(3)
+        if not top_values or all(v.normalized_score == 0 for v in top_values):
+            await interaction.followup.send(
+                "You need to build your own value profile first before comparing.\n\n"
+                "Keep journaling and then try again!",
+                ephemeral=True
+            )
+            return
+
+        # Generate comparison
+        comparison_text = generate_comparison_with_import_narrative(your_profile, imported)
+
+        await interaction.followup.send(comparison_text, ephemeral=True)
+        logger.info(f"User {user_id} compared values with {imported.display_name}")
+
+    except Exception as e:
+        logger.error(f"Error in compare-file: {e}")
+        await interaction.followup.send(
+            "Something went wrong reading that file. Make sure it's a valid Kodak export.",
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="pause", description="Pause daily check-ins")
+async def pause_command(interaction: discord.Interaction):
+    """Pause scheduled prompts."""
+    user_id = str(interaction.user.id)
+    await update_user(user_id, tracking_paused=1)
+
+    await interaction.response.send_message(
+        "Paused. I won't send check-ins until you `/resume`.\n"
+        "You can still message me anytime.",
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} paused prompts")
+
+
+@bot.tree.command(name="resume", description="Resume daily check-ins")
+async def resume_command(interaction: discord.Interaction):
+    """Resume scheduled prompts."""
+    user_id = str(interaction.user.id)
+    user = await update_user(user_id, tracking_paused=0)
+
+    prompt_time = user.get('prompt_time')
+    if prompt_time:
+        display_time = format_time_display(prompt_time)
+        await interaction.response.send_message(
+            f"Resumed! I'll check in at **{display_time}**.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            "Resumed! Use `/schedule` to set your check-in time.",
+            ephemeral=True
+        )
+    logger.info(f"User {user_id} resumed prompts")
+
+
+@bot.tree.command(name="export", description="Download all your data")
+async def export_command(interaction: discord.Interaction):
+    """Export user data as JSON."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    data = await export_user_data(user_id)
+
+    import json
+    import io
+
+    json_str = json.dumps(data, indent=2, default=str)
+    file = discord.File(
+        io.BytesIO(json_str.encode()),
+        filename=f"kodak-export-{user_id[:8]}.json"
+    )
+
+    await interaction.followup.send(
+        "Here's all your data:",
+        file=file,
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} exported data")
+
+
+@bot.tree.command(name="clear", description="Delete all your data")
+async def clear_command(interaction: discord.Interaction):
+    """Delete all user data (with confirmation)."""
+
+    class ConfirmClear(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+
+        @discord.ui.button(label="Yes, delete everything", style=discord.ButtonStyle.danger)
+        async def confirm(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            await clear_all_user_data(str(interaction.user.id))
+            await button_interaction.response.edit_message(
+                content="All your data has been deleted.",
+                view=None
+            )
+            logger.info(f"User {interaction.user.id} cleared all data")
+
+        @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+        async def cancel(self, button_interaction: discord.Interaction, button: discord.ui.Button):
+            await button_interaction.response.edit_message(
+                content="Cancelled. Your data is safe.",
+                view=None
+            )
+
+    await interaction.response.send_message(
+        "**Are you sure?**\n\n"
+        "This will permanently delete:\n"
+        "- All your journal sessions\n"
+        "- All extracted beliefs\n"
+        "- Your value profile\n"
+        "- All conversation history\n\n"
+        "This cannot be undone.",
+        view=ConfirmClear(),
+        ephemeral=True
+    )
+
+
+# ============================================
+# BELIEF MANAGEMENT COMMANDS
+# ============================================
+
+def confidence_bar(confidence: float) -> str:
+    """Create a visual confidence bar."""
+    filled = int(confidence * 5)
+    return "●" * filled + "○" * (5 - filled)
+
+
+@bot.tree.command(name="map", description="See your belief map")
+async def map_command(interaction: discord.Interaction):
+    """Show the user's belief map grouped by topic."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    beliefs = await get_user_beliefs(user_id)
+
+    if not beliefs:
+        await interaction.followup.send(
+            "No beliefs mapped yet. Keep journaling and I'll extract patterns from what you share!",
+            ephemeral=True
+        )
+        return
+
+    topics = await get_all_topics(user_id)
+
     response = f"**Your Belief Map**\n"
     response += f"*{len(beliefs)} beliefs across {len(topics)} topics*\n\n"
 
-    # Group beliefs by topic for visualization
     if topics:
-        response += "```\n"
-        for topic in topics[:5]:  # Limit to 5 topics
-            topic_beliefs = await get_beliefs_by_topic(str(interaction.user.id), topic)
-            response += f"{'─' * 40}\n"
-            response += f"  {topic.upper()}\n"
-            response += f"{'─' * 40}\n"
-            for b in topic_beliefs[:2]:  # Limit to 2 beliefs per topic for space
+        for topic in topics[:6]:
+            topic_beliefs = await get_beliefs_by_topic(user_id, topic)
+            response += f"**{topic.title()}**\n"
+            for b in topic_beliefs[:3]:
                 conf = confidence_bar(b.get('confidence', 0.5))
-                response += f"  [{conf}] {b['statement']}\n"
+                stmt = b['statement'][:60] + "..." if len(b['statement']) > 60 else b['statement']
+                response += f"  [{conf}] {stmt}\n"
             response += "\n"
-        response += "```\n"
 
-    response += f"\n{summary}"
-    response += f"\n\nUse `/explore [topic]` to dive deeper."
+    response += f"Use `/explore [topic]` to dive deeper, or `/beliefs` for the full list."
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -912,15 +1067,16 @@ async def map_command(interaction: discord.Interaction):
 
 @bot.tree.command(name="explore", description="Explore beliefs about a topic")
 @app_commands.describe(topic="The topic to explore")
-@app_commands.autocomplete(topic=topic_autocomplete)
 async def explore_command(interaction: discord.Interaction, topic: str):
     """Explore beliefs about a specific topic."""
     await interaction.response.defer(ephemeral=True)
 
-    beliefs = await get_beliefs_by_topic(str(interaction.user.id), topic.lower())
+    user_id = str(interaction.user.id)
+    beliefs = await get_beliefs_by_topic(user_id, topic.lower())
 
     if not beliefs:
-        all_beliefs = await get_user_beliefs(str(interaction.user.id))
+        # Try searching in statements
+        all_beliefs = await get_user_beliefs(user_id)
         beliefs = [
             b for b in all_beliefs
             if topic.lower() in b["statement"].lower()
@@ -928,50 +1084,26 @@ async def explore_command(interaction: discord.Interaction, topic: str):
         ]
 
     if not beliefs:
-        topics = await get_all_topics(str(interaction.user.id))
-
-        if not topics:
+        topics = await get_all_topics(user_id)
+        if topics:
             await interaction.followup.send(
                 f"No beliefs found about '{topic}'.\n\n"
-                "You don't have any topics mapped yet. Keep chatting and I'll build your map!",
+                f"**Topics you have:** {', '.join(topics[:10])}",
                 ephemeral=True
             )
-            return
-
-        # Find similar topics (partial matches)
-        search_lower = topic.lower()
-        similar = [t for t in topics if search_lower in t or t in search_lower]
-
-        # Also check topic synonyms for related concepts
-        from db import TOPIC_SYNONYMS
-        # Find canonical form if searched term is a synonym
-        canonical = TOPIC_SYNONYMS.get(search_lower)
-        if canonical and canonical in topics and canonical not in similar:
-            similar.append(canonical)
-        # Find synonyms that map to the same canonical as existing topics
-        for t in topics:
-            if TOPIC_SYNONYMS.get(search_lower) == t or TOPIC_SYNONYMS.get(t) == search_lower:
-                if t not in similar:
-                    similar.append(t)
-
-        response = f"No beliefs found about '{topic}'.\n\n"
-
-        if similar:
-            response += "**Similar topics you have:**\n"
-            for t in similar[:5]:
-                response += f"• `/explore {t}`\n"
-            response += "\n"
-
-        # Show other topics if there's room
-        other_topics = [t for t in topics if t not in similar][:8]
-        if other_topics:
-            response += f"**Other topics:** {', '.join(other_topics)}"
-
-        await interaction.followup.send(response, ephemeral=True)
+        else:
+            await interaction.followup.send(
+                f"No beliefs found about '{topic}'.\n\n"
+                "Keep journaling to build your map!",
+                ephemeral=True
+            )
         return
 
-    summary = await summarize_beliefs(beliefs, topic)
-    response = f"**Beliefs about: {topic}**\n\n{summary}"
+    response = f"**Beliefs about: {topic}**\n\n"
+    for b in beliefs[:10]:
+        conf = confidence_bar(b.get('confidence', 0.5))
+        response += f"[{conf}] {b['statement']}\n"
+        response += f"  `ID: {b['id'][:8]}`\n\n"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -979,33 +1111,30 @@ async def explore_command(interaction: discord.Interaction, topic: str):
     await interaction.followup.send(response, ephemeral=True)
 
 
-@bot.tree.command(name="beliefs", description="List your beliefs (raw)")
+@bot.tree.command(name="beliefs", description="List all your beliefs")
 async def beliefs_command(interaction: discord.Interaction):
     """List all beliefs in raw format."""
     await interaction.response.defer(ephemeral=True)
 
-    beliefs = await get_user_beliefs(str(interaction.user.id))
+    user_id = str(interaction.user.id)
+    beliefs = await get_user_beliefs(user_id)
 
     if not beliefs:
-        await interaction.followup.send("No beliefs mapped yet.", ephemeral=True)
+        await interaction.followup.send(
+            "No beliefs recorded yet. Keep journaling!",
+            ephemeral=True
+        )
         return
 
-    lines = []
-    for b in beliefs[:20]:
+    response = f"**Your Beliefs** ({len(beliefs)} total)\n\n"
+    for b in beliefs[:15]:
         conf = confidence_bar(b.get('confidence', 0.5))
-        imp = importance_stars(b.get('importance', 3))
-        topics = ", ".join(b.get("topics", []))
-        topic_str = f" *({topics})*" if topics else ""
-        lines.append(f"`{b['id'][:8]}` {imp} [{conf}] {b['statement']}{topic_str}")
+        imp = "⭐" if b.get('importance', 3) >= 4 else ""
+        response += f"[{conf}]{imp} {b['statement']}\n"
+        response += f"  `{b['id'][:8]}` · {', '.join(b.get('topics', []))}\n\n"
 
-    response = "**Your Beliefs:**\n"
-    response += "*★=importance, ●=confidence*\n\n"
-    response += "\n\n".join(lines)
-
-    if len(beliefs) > 20:
-        response += f"\n\n*...and {len(beliefs) - 20} more*"
-
-    response += f"\n\n*Use `/mark [id] [1-5]` to set importance. `/core` for important beliefs only.*"
+    if len(beliefs) > 15:
+        response += f"*...and {len(beliefs) - 15} more. Use `/explore [topic]` to filter.*"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -1015,456 +1144,322 @@ async def beliefs_command(interaction: discord.Interaction):
 
 @bot.tree.command(name="belief", description="View a single belief in detail")
 @app_commands.describe(belief_id="The belief ID (first 8 characters)")
-@app_commands.autocomplete(belief_id=belief_autocomplete)
 async def belief_command(interaction: discord.Interaction, belief_id: str):
-    """View a single belief with its relations."""
+    """View details of a single belief."""
     await interaction.response.defer(ephemeral=True)
 
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
+    user_id = str(interaction.user.id)
 
-    if not matching:
+    # Find belief by partial ID
+    all_beliefs = await get_user_beliefs(user_id, include_deleted=False)
+    belief = next((b for b in all_beliefs if b['id'].startswith(belief_id)), None)
+
+    if not belief:
         await interaction.followup.send(
-            f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
+            f"Couldn't find a belief starting with `{belief_id}`.\n"
+            "Use `/beliefs` to see your beliefs with their IDs.",
             ephemeral=True
         )
         return
 
-    if len(matching) > 1:
-        await interaction.followup.send(
-            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
-            ephemeral=True
-        )
-        return
-
-    belief = matching[0]
-
-    # Get relations in both directions
-    outgoing_relations = await get_belief_relations(belief["id"])
-    incoming_relations = await get_belief_relations_inverse(belief["id"])
-
-    # Build indicators
     conf = confidence_bar(belief.get('confidence', 0.5))
-    imp = importance_stars(belief.get('importance', 3))
-    topics = ", ".join(belief.get("topics", [])) or "none"
+    imp = belief.get('importance', 3)
+    imp_stars = "⭐" * imp
 
-    response = f"**{belief['statement']}**\n\n"
-    response += f"Confidence: [{conf}] {int(belief.get('confidence', 0.5) * 100)}%\n"
-    response += f"Importance: {imp}\n"
-    response += f"Source: {belief.get('source_type', 'unknown')}\n"
-    response += f"Topics: {topics}\n"
-    response += f"ID: `{belief['id'][:8]}`\n"
-
-    # Group relations by type
-    foundations = [r for r in outgoing_relations if r["relation_type"] in ("assumes", "derives_from")]
-    supports = [r for r in outgoing_relations if r["relation_type"] == "supports"]
-    tensions = [r for r in outgoing_relations if r["relation_type"] == "contradicts"]
-    related = [r for r in outgoing_relations if r["relation_type"] == "relates_to"]
-
-    # Beliefs that depend on this one (from incoming)
-    supported_by_this = [r for r in incoming_relations if r["relation_type"] in ("assumes", "derives_from")]
-
-    has_connections = foundations or supports or tensions or related or supported_by_this
-
-    if has_connections:
-        response += "\n"
-
-        if foundations:
-            response += "```\n┌─ FOUNDATIONS (this belief assumes):\n"
-            for r in foundations:
-                stmt = r.get("target_statement", "")[:50]
-                if len(r.get("target_statement", "")) > 50:
-                    stmt += "..."
-                response += f"│  • {stmt}\n"
-            response += "```\n"
-
-        if supports:
-            response += "```\n├─ SUPPORTS:\n"
-            for r in supports:
-                stmt = r.get("target_statement", "")[:50]
-                if len(r.get("target_statement", "")) > 50:
-                    stmt += "..."
-                response += f"│  • {stmt}\n"
-            response += "```\n"
-
-        if supported_by_this:
-            response += "```\n├─ SUPPORTS THIS (beliefs built on this one):\n"
-            for r in supported_by_this:
-                stmt = r.get("source_statement", "")[:50]
-                if len(r.get("source_statement", "")) > 50:
-                    stmt += "..."
-                response += f"│  • {stmt}\n"
-            response += "```\n"
-
-        if tensions:
-            response += "```\n├─ ⚡ TENSIONS:\n"
-            for r in tensions:
-                stmt = r.get("target_statement", "")[:50]
-                if len(r.get("target_statement", "")) > 50:
-                    stmt += "..."
-                response += f"│  • {stmt}\n"
-            response += "│  (You hold both — worth exploring?)\n"
-            response += "```\n"
-
-        if related:
-            response += "```\n└─ RELATED:\n"
-            for r in related[:3]:  # Limit related to avoid clutter
-                stmt = r.get("target_statement", "")[:50]
-                if len(r.get("target_statement", "")) > 50:
-                    stmt += "..."
-                response += f"   • {stmt}\n"
-            response += "```\n"
-    else:
-        response += "\n*No connections to other beliefs yet.*\n"
-
-    response += f"\n`/mark {belief['id'][:8]} [1-5]` to change importance"
-    response += f" • `/forget {belief['id'][:8]}` to remove"
-
-    if len(response) > 2000:
-        response = response[:1997] + "..."
+    response = f"**Belief Detail**\n\n"
+    response += f"> {belief['statement']}\n\n"
+    response += f"**Confidence:** [{conf}] {belief.get('confidence', 0.5):.0%}\n"
+    response += f"**Importance:** {imp_stars} ({imp}/5)\n"
+    response += f"**Topics:** {', '.join(belief.get('topics', ['none']))}\n"
+    response += f"**Source:** {belief.get('source_type', 'unknown')}\n"
+    response += f"**First expressed:** {belief.get('first_expressed', 'unknown')[:10]}\n"
+    response += f"\n`ID: {belief['id']}`"
 
     await interaction.followup.send(response, ephemeral=True)
 
 
-@bot.tree.command(name="forget", description="Delete a belief from your map")
-@app_commands.describe(belief_id="The belief ID (first 8 characters) or 'last' for most recent")
-@app_commands.autocomplete(belief_id=belief_autocomplete)
+@bot.tree.command(name="forget", description="Delete a belief")
+@app_commands.describe(belief_id="The belief ID to delete")
 async def forget_command(interaction: discord.Interaction, belief_id: str):
-    """Delete a belief."""
-    await interaction.response.defer(ephemeral=True)
+    """Delete a belief from the map."""
+    user_id = str(interaction.user.id)
 
-    if belief_id.lower() == "last":
-        recent = await get_recent_beliefs(str(interaction.user.id), limit=1)
-        if not recent:
-            await interaction.followup.send("No beliefs to forget.", ephemeral=True)
-            return
-        belief = recent[0]
-    else:
-        beliefs = await get_user_beliefs(str(interaction.user.id))
-        matching = [b for b in beliefs if b["id"].startswith(belief_id)]
+    # Find belief by partial ID
+    all_beliefs = await get_user_beliefs(user_id)
+    belief = next((b for b in all_beliefs if b['id'].startswith(belief_id)), None)
 
-        if not matching:
-            await interaction.followup.send(
-                f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
-                ephemeral=True
-            )
-            return
-
-        if len(matching) > 1:
-            await interaction.followup.send(
-                f"Multiple beliefs match `{belief_id}`. Please be more specific.",
-                ephemeral=True
-            )
-            return
-
-        belief = matching[0]
-
-    success = await soft_delete_belief(belief["id"], str(interaction.user.id))
-
-    if success:
-        # Store for potential undo
-        last_deleted_belief[str(interaction.user.id)] = belief
-        logger.info(f"Belief forgotten by user:{interaction.user.id} - {belief['id'][:8]}")
-
-        await interaction.followup.send(
-            f"Forgotten: *{belief['statement']}*\n\n"
-            f"*Changed your mind? Use `/undo` to restore it.*",
+    if not belief:
+        await interaction.response.send_message(
+            f"Couldn't find a belief starting with `{belief_id}`.",
             ephemeral=True
         )
+        return
+
+    success = await soft_delete_belief(belief['id'], user_id)
+
+    if success:
+        await interaction.response.send_message(
+            f"Forgotten: *\"{belief['statement'][:50]}...\"*\n\n"
+            "Use `/undo` to restore it.",
+            ephemeral=True
+        )
+        logger.info(f"User {user_id} forgot belief {belief['id']}")
     else:
-        await interaction.followup.send("Hmm, couldn't delete that one.", ephemeral=True)
+        await interaction.response.send_message(
+            "Couldn't delete that belief.",
+            ephemeral=True
+        )
 
 
 @bot.tree.command(name="undo", description="Restore the last forgotten belief")
 async def undo_command(interaction: discord.Interaction):
-    """Restore the most recently forgotten belief."""
+    """Restore the most recently deleted belief."""
     user_id = str(interaction.user.id)
 
-    if user_id not in last_deleted_belief:
+    deleted = await get_last_deleted_belief(user_id)
+
+    if not deleted:
         await interaction.response.send_message(
-            "Nothing to undo. Use `/forget` first to delete a belief.",
+            "Nothing to undo.",
             ephemeral=True
         )
         return
 
-    belief = last_deleted_belief[user_id]
-    success = await restore_belief(belief["id"], user_id)
+    success = await restore_belief(deleted['id'], user_id)
 
     if success:
-        # Clear from undo buffer
-        del last_deleted_belief[user_id]
-        logger.info(f"Belief restored by user:{user_id} - {belief['id'][:8]}")
-
         await interaction.response.send_message(
-            f"Restored: *{belief['statement']}*",
+            f"Restored: *\"{deleted['statement'][:50]}...\"*",
+            ephemeral=True
+        )
+        logger.info(f"User {user_id} restored belief {deleted['id']}")
+    else:
+        await interaction.response.send_message(
+            "Couldn't restore the belief.",
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="confidence", description="Update your confidence in a belief")
+@app_commands.describe(
+    belief_id="The belief ID",
+    level="New confidence level"
+)
+@app_commands.choices(level=[
+    app_commands.Choice(name="Very uncertain (20%)", value="0.2"),
+    app_commands.Choice(name="Somewhat uncertain (40%)", value="0.4"),
+    app_commands.Choice(name="Neutral (60%)", value="0.6"),
+    app_commands.Choice(name="Fairly confident (80%)", value="0.8"),
+    app_commands.Choice(name="Very confident (100%)", value="1.0"),
+])
+async def confidence_command(interaction: discord.Interaction, belief_id: str, level: str):
+    """Update confidence in a belief."""
+    user_id = str(interaction.user.id)
+    new_confidence = float(level)
+
+    # Find belief by partial ID
+    all_beliefs = await get_user_beliefs(user_id)
+    belief = next((b for b in all_beliefs if b['id'].startswith(belief_id)), None)
+
+    if not belief:
+        await interaction.response.send_message(
+            f"Couldn't find a belief starting with `{belief_id}`.",
+            ephemeral=True
+        )
+        return
+
+    success = await update_belief_confidence(belief['id'], user_id, new_confidence)
+
+    if success:
+        conf = confidence_bar(new_confidence)
+        await interaction.response.send_message(
+            f"Updated confidence to [{conf}] {new_confidence:.0%}\n\n"
+            f"*\"{belief['statement'][:60]}...\"*",
             ephemeral=True
         )
     else:
-        # Might have been permanently deleted or already restored
-        del last_deleted_belief[user_id]
         await interaction.response.send_message(
-            "Couldn't restore that belief. It may have already been restored or permanently deleted.",
+            "Couldn't update confidence.",
             ephemeral=True
         )
 
 
-@bot.tree.command(name="confidence", description="Update how confident you are in a belief")
+@bot.tree.command(name="mark", description="Mark how important a belief is")
 @app_commands.describe(
-    belief_id="The belief ID (first 8 characters)",
-    level="1 (very uncertain) to 5 (very certain)"
+    belief_id="The belief ID",
+    importance="How important is this belief to you?"
 )
-@app_commands.autocomplete(belief_id=belief_autocomplete)
-async def confidence_command(interaction: discord.Interaction, belief_id: str, level: int):
-    """Update confidence and record evolution."""
-    if level < 1 or level > 5:
-        await interaction.response.send_message(
-            "Confidence level must be between 1 and 5.",
-            ephemeral=True
-        )
-        return
-
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
-
-    if not matching:
-        await interaction.response.send_message(
-            f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
-            ephemeral=True
-        )
-        return
-
-    if len(matching) > 1:
-        await interaction.response.send_message(
-            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
-            ephemeral=True
-        )
-        return
-
-    belief = matching[0]
-    new_confidence = level / 5.0  # Convert 1-5 to 0.0-1.0
-
-    old_conf_pct = int(belief.get('confidence', 0.5) * 100)
-    new_conf_pct = int(new_confidence * 100)
-
-    success = await update_belief_confidence(
-        belief["id"],
-        str(interaction.user.id),
-        new_confidence,
-        trigger="Manual update via /confidence"
-    )
-
-    if success:
-        direction = "↑" if new_conf_pct > old_conf_pct else "↓" if new_conf_pct < old_conf_pct else "="
-        conf_bar = "●" * level + "○" * (5 - level)
-
-        confidence_labels = {
-            1: "Very uncertain",
-            2: "Somewhat uncertain",
-            3: "Moderate",
-            4: "Fairly confident",
-            5: "Very certain"
-        }
-
-        await interaction.response.send_message(
-            f"Updated confidence: {old_conf_pct}% {direction} {new_conf_pct}% [{conf_bar}]\n"
-            f"**{confidence_labels[level]}**\n\n"
-            f"*{belief['statement'][:80]}{'...' if len(belief['statement']) > 80 else ''}*\n\n"
-            f"Use `/history {belief['id'][:8]}` to see this belief's evolution.",
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message("Couldn't update that belief.", ephemeral=True)
-
-
-@bot.tree.command(name="mark", description="Set how important a belief is to you")
-@app_commands.describe(
-    belief_id="The belief ID (first 8 characters)",
-    importance="1 (peripheral) to 5 (core)"
-)
-@app_commands.autocomplete(belief_id=belief_autocomplete)
+@app_commands.choices(importance=[
+    app_commands.Choice(name="⭐ Minor", value=1),
+    app_commands.Choice(name="⭐⭐ Somewhat", value=2),
+    app_commands.Choice(name="⭐⭐⭐ Moderate", value=3),
+    app_commands.Choice(name="⭐⭐⭐⭐ Important", value=4),
+    app_commands.Choice(name="⭐⭐⭐⭐⭐ Core belief", value=5),
+])
 async def mark_command(interaction: discord.Interaction, belief_id: str, importance: int):
-    """Mark a belief's importance level."""
-    if importance < 1 or importance > 5:
+    """Set importance of a belief."""
+    user_id = str(interaction.user.id)
+
+    # Find belief by partial ID
+    all_beliefs = await get_user_beliefs(user_id)
+    belief = next((b for b in all_beliefs if b['id'].startswith(belief_id)), None)
+
+    if not belief:
         await interaction.response.send_message(
-            "Importance must be between 1 and 5.",
+            f"Couldn't find a belief starting with `{belief_id}`.",
             ephemeral=True
         )
         return
 
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
-
-    if not matching:
-        await interaction.response.send_message(
-            f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
-            ephemeral=True
-        )
-        return
-
-    if len(matching) > 1:
-        await interaction.response.send_message(
-            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
-            ephemeral=True
-        )
-        return
-
-    belief = matching[0]
-    success = await set_belief_importance(belief["id"], str(interaction.user.id), importance)
+    success = await update_belief_importance(belief['id'], user_id, importance)
 
     if success:
-        importance_labels = {
-            1: "Peripheral — passing thought",
-            2: "Low — hold loosely",
-            3: "Medium — significant but flexible",
-            4: "High — very important",
-            5: "Core — foundational to who you are"
-        }
-        stars = importance_stars(importance)
+        stars = "⭐" * importance
         await interaction.response.send_message(
-            f"Marked as **{importance_labels[importance]}** ({stars}):\n"
-            f"*{belief['statement']}*",
+            f"Marked as {stars}\n\n"
+            f"*\"{belief['statement'][:60]}...\"*",
             ephemeral=True
         )
     else:
-        await interaction.response.send_message("Couldn't update that belief.", ephemeral=True)
+        await interaction.response.send_message(
+            "Couldn't update importance.",
+            ephemeral=True
+        )
 
 
-@bot.tree.command(name="core", description="Show only your most important beliefs")
+@bot.tree.command(name="core", description="Show your most important beliefs")
 async def core_command(interaction: discord.Interaction):
-    """Show beliefs marked as high importance (4-5)."""
+    """Show beliefs marked as important."""
     await interaction.response.defer(ephemeral=True)
 
-    beliefs = await get_beliefs_by_importance(str(interaction.user.id), min_importance=4)
+    user_id = str(interaction.user.id)
+    beliefs = await get_important_beliefs(user_id, min_importance=4)
 
     if not beliefs:
         await interaction.followup.send(
-            "No core beliefs marked yet.\n"
-            "Use `/mark [id] 4` or `/mark [id] 5` to mark important beliefs.",
+            "No core beliefs marked yet.\n\n"
+            "Use `/mark [id] [importance]` to mark beliefs that matter most to you.",
             ephemeral=True
         )
         return
 
-    lines = []
-    for b in beliefs[:15]:
-        conf = confidence_bar(b.get('confidence', 0.5))
-        imp = importance_stars(b.get('importance', 3))
-        lines.append(f"{imp} [{conf}] {b['statement']}")
-
-    response = "**Your Core Beliefs (★★★★+):**\n\n"
-    response += "\n\n".join(lines)
-
-    if len(beliefs) > 15:
-        response += f"\n\n*...and {len(beliefs) - 15} more*"
+    response = "**Your Core Beliefs**\n\n"
+    for b in beliefs[:10]:
+        stars = "⭐" * b.get('importance', 4)
+        response += f"{stars} {b['statement']}\n\n"
 
     await interaction.followup.send(response, ephemeral=True)
 
 
-@bot.tree.command(name="tensions", description="Show beliefs that might contradict each other")
-async def tensions_command(interaction: discord.Interaction):
-    """Show all contradicting belief pairs."""
-    await interaction.response.defer(ephemeral=True)
+@bot.tree.command(name="style", description="Fine-tune personality dimensions")
+async def style_command(interaction: discord.Interaction):
+    """Show current personality dimensions."""
+    user_id = str(interaction.user.id)
+    user = await get_or_create_user(user_id)
 
-    tensions = await get_all_tensions(str(interaction.user.id))
+    preset = user.get('personality_preset', 'best_friend')
+    warmth = user.get('warmth', 3)
+    directness = user.get('directness', 3)
+    playfulness = user.get('playfulness', 3)
+    formality = user.get('formality', 3)
 
-    if not tensions:
-        await interaction.followup.send(
-            "No tensions found in your belief map.\n\n"
-            "This could mean your beliefs are consistent, or I haven't "
-            "detected any contradictions yet. Keep chatting and I'll "
-            "notice if something doesn't quite fit together.",
-            ephemeral=True
-        )
-        return
+    def dim_bar(val):
+        return "█" * val + "░" * (5 - val)
 
-    response = "**⚡ Tensions in Your Belief Map**\n\n"
-    response += "*These beliefs might be in tension with each other. "
-    response += "That's not necessarily bad — exploring contradictions can lead to deeper understanding.*\n\n"
+    response = (
+        f"**Your Style** (preset: {preset})\n\n"
+        f"Warmth:      [{dim_bar(warmth)}] {warmth}/5\n"
+        f"Directness:  [{dim_bar(directness)}] {directness}/5\n"
+        f"Playfulness: [{dim_bar(playfulness)}] {playfulness}/5\n"
+        f"Formality:   [{dim_bar(formality)}] {formality}/5\n\n"
+        f"Use `/setup` to change personality preset."
+    )
 
-    for i, t in enumerate(tensions[:5], 1):
-        src_imp = importance_stars(t.get('source_importance', 3))
-        tgt_imp = importance_stars(t.get('target_importance', 3))
+    await interaction.response.send_message(response, ephemeral=True)
 
-        src_stmt = t['source_statement'][:70]
-        if len(t['source_statement']) > 70:
-            src_stmt += "..."
 
-        tgt_stmt = t['target_statement'][:70]
-        if len(t['target_statement']) > 70:
-            tgt_stmt += "..."
+@bot.tree.command(name="timezone", description="Set your timezone")
+@app_commands.describe(tz="Your timezone (e.g., America/New_York, Europe/London)")
+async def timezone_command(interaction: discord.Interaction, tz: str):
+    """Set user's timezone."""
+    user_id = str(interaction.user.id)
 
-        response += f"**Tension {i}:**\n"
-        response += f"```\n"
-        response += f"{src_imp} \"{src_stmt}\"\n"
-        response += f"      ⚡ vs ⚡\n"
-        response += f"{tgt_imp} \"{tgt_stmt}\"\n"
-        response += f"```\n"
+    # Basic validation
+    common_timezones = [
+        'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+        'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+        'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Singapore',
+        'Australia/Sydney', 'Pacific/Auckland', 'UTC'
+    ]
 
-    if len(tensions) > 5:
-        response += f"\n*...and {len(tensions) - 5} more tension(s)*\n"
+    # Accept common abbreviations
+    tz_map = {
+        'est': 'America/New_York', 'edt': 'America/New_York',
+        'cst': 'America/Chicago', 'cdt': 'America/Chicago',
+        'mst': 'America/Denver', 'mdt': 'America/Denver',
+        'pst': 'America/Los_Angeles', 'pdt': 'America/Los_Angeles',
+        'gmt': 'Europe/London', 'bst': 'Europe/London',
+        'utc': 'UTC'
+    }
 
-    response += "\n*Want to explore a tension? Just ask me about it.*"
+    resolved_tz = tz_map.get(tz.lower(), tz)
 
-    if len(response) > 2000:
-        response = response[:1997] + "..."
+    await update_user(user_id, timezone=resolved_tz)
 
-    await interaction.followup.send(response, ephemeral=True)
+    await interaction.response.send_message(
+        f"Timezone set to **{resolved_tz}**.\n\n"
+        "Your scheduled prompts will use this timezone.",
+        ephemeral=True
+    )
+    logger.info(f"User {user_id} set timezone to {resolved_tz}")
 
 
 @bot.tree.command(name="history", description="See how a belief has evolved over time")
 @app_commands.describe(belief_id="The belief ID (first 8 characters)")
-@app_commands.autocomplete(belief_id=belief_autocomplete)
 async def history_command(interaction: discord.Interaction, belief_id: str):
     """Show the evolution history of a specific belief."""
     await interaction.response.defer(ephemeral=True)
 
-    beliefs = await get_user_beliefs(str(interaction.user.id))
-    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
+    user_id = str(interaction.user.id)
+    all_beliefs = await get_user_beliefs(user_id)
+    belief = next((b for b in all_beliefs if b['id'].startswith(belief_id)), None)
 
-    if not matching:
+    if not belief:
         await interaction.followup.send(
             f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
             ephemeral=True
         )
         return
 
-    if len(matching) > 1:
-        await interaction.followup.send(
-            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
-            ephemeral=True
-        )
-        return
-
-    belief = matching[0]
-    history = await get_belief_history(belief["id"])
+    history = await get_belief_history(belief['id'])
 
     # Current state
     conf = confidence_bar(belief.get('confidence', 0.5))
-    imp = importance_stars(belief.get('importance', 3))
+    imp = "⭐" * belief.get('importance', 3)
 
     response = f"**Evolution of Belief:**\n"
     response += f"*\"{belief['statement']}\"*\n\n"
-
-    response += f"**Current state:** [{conf}] {int(belief.get('confidence', 0.5) * 100)}% confidence, {imp} importance\n"
+    response += f"**Current state:** [{conf}] {int(belief.get('confidence', 0.5) * 100)}% confidence, {imp}\n"
     response += f"**First expressed:** {belief.get('first_expressed', 'unknown')[:10]}\n\n"
 
     if history:
         response += "**Changes:**\n```\n"
-        for i, h in enumerate(history[:10]):
+        for h in history[:10]:
             timestamp = h.get('timestamp', '')[:10]
 
-            if h.get('old_confidence') and h.get('new_confidence'):
+            if h.get('old_confidence') is not None and h.get('new_confidence') is not None:
                 old_pct = int(h['old_confidence'] * 100)
                 new_pct = int(h['new_confidence'] * 100)
                 direction = "↑" if new_pct > old_pct else "↓"
-                response += f"📅 {timestamp} — Confidence {old_pct}% {direction} {new_pct}%\n"
+                response += f"{timestamp} — Confidence {old_pct}% {direction} {new_pct}%\n"
 
             if h.get('old_statement') and h.get('new_statement'):
-                response += f"📅 {timestamp} — Wording changed\n"
-                response += f"   From: \"{h['old_statement'][:40]}...\"\n"
-                response += f"   To:   \"{h['new_statement'][:40]}...\"\n"
+                response += f"{timestamp} — Wording changed\n"
+                response += f"  From: \"{h['old_statement'][:40]}...\"\n"
+                response += f"  To:   \"{h['new_statement'][:40]}...\"\n"
 
             if h.get('trigger'):
-                response += f"   Trigger: {h['trigger'][:50]}\n"
+                response += f"  Trigger: {h['trigger'][:50]}\n"
 
             response += "\n"
         response += "```"
@@ -1473,7 +1468,6 @@ async def history_command(interaction: discord.Interaction, belief_id: str):
             response += f"\n*...and {len(history) - 10} earlier change(s)*"
     else:
         response += "*No recorded changes yet. This belief has remained stable.*\n"
-        response += "\n*As you chat and your views evolve, I'll track the changes here.*"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -1491,7 +1485,8 @@ async def changes_command(interaction: discord.Interaction, days: int = 30):
         await interaction.followup.send("Days must be between 1 and 365.", ephemeral=True)
         return
 
-    changes = await get_recent_changes(str(interaction.user.id), days)
+    user_id = str(interaction.user.id)
+    changes = await get_recent_changes(user_id, days)
 
     if not changes:
         await interaction.followup.send(
@@ -1509,36 +1504,30 @@ async def changes_command(interaction: discord.Interaction, days: int = 30):
             belief_changes[bid] = {
                 'statement': c['current_statement'],
                 'current_confidence': c['current_confidence'],
-                'importance': c.get('importance', 3),
+                'importance': c['importance'],
                 'changes': []
             }
         belief_changes[bid]['changes'].append(c)
 
-    response = f"**🔄 Belief Changes (last {days} days)**\n\n"
+    response = f"**Belief Changes** (last {days} days)\n\n"
 
-    for i, (bid, data) in enumerate(list(belief_changes.items())[:5]):
-        stmt = data['statement'][:60]
-        if len(data['statement']) > 60:
+    for bid, data in list(belief_changes.items())[:5]:
+        stmt = data['statement'][:50]
+        if len(data['statement']) > 50:
             stmt += "..."
 
-        imp = importance_stars(data['importance'])
-        response += f"**{i+1}. {stmt}**\n"
-        response += f"   {imp} | {len(data['changes'])} change(s)\n"
-
-        # Show most recent change
-        latest = data['changes'][0]
-        if latest.get('old_confidence') and latest.get('new_confidence'):
-            old_pct = int(latest['old_confidence'] * 100)
-            new_pct = int(latest['new_confidence'] * 100)
-            direction = "↑" if new_pct > old_pct else "↓"
-            response += f"   Latest: {old_pct}% {direction} {new_pct}%\n"
-
-        response += f"   `/history {bid[:8]}` for full evolution\n\n"
+        response += f"**{stmt}**\n"
+        for ch in data['changes'][:3]:
+            ts = ch.get('timestamp', '')[:10]
+            if ch.get('old_confidence') is not None and ch.get('new_confidence') is not None:
+                old_pct = int(ch['old_confidence'] * 100)
+                new_pct = int(ch['new_confidence'] * 100)
+                direction = "↑" if new_pct > old_pct else "↓"
+                response += f"  {ts}: {old_pct}% {direction} {new_pct}%\n"
+        response += f"  `{bid[:8]}`\n\n"
 
     if len(belief_changes) > 5:
-        response += f"*...and {len(belief_changes) - 5} more belief(s) changed*\n"
-
-    response += "\n*Your beliefs are living ideas. Change is growth.*"
+        response += f"*...and {len(belief_changes) - 5} more beliefs with changes*"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -1546,793 +1535,156 @@ async def changes_command(interaction: discord.Interaction, days: int = 30):
     await interaction.followup.send(response, ephemeral=True)
 
 
-@bot.tree.command(name="share", description="Create a shareable snapshot of your beliefs")
-@app_commands.describe(
-    topic="Share beliefs about a specific topic (optional)",
-    core_only="Only share important beliefs (4-5 stars)"
-)
-@app_commands.autocomplete(topic=topic_autocomplete)
-async def share_command(
-    interaction: discord.Interaction,
-    topic: str = None,
-    core_only: bool = False
-):
-    """Generate a shareable belief snapshot."""
+@bot.tree.command(name="tensions", description="Show beliefs that might contradict each other")
+async def tensions_command(interaction: discord.Interaction):
+    """Show all contradicting belief pairs."""
     await interaction.response.defer(ephemeral=True)
 
-    if topic:
-        beliefs = await get_beliefs_by_topic(str(interaction.user.id), topic)
-        title = f"Beliefs: {topic.upper()}"
-    elif core_only:
-        beliefs = await get_beliefs_by_importance(str(interaction.user.id), min_importance=4)
-        title = "Core Beliefs"
-    else:
-        beliefs = await get_user_beliefs(str(interaction.user.id))
-        title = "Belief Snapshot"
-
-    if not beliefs:
-        await interaction.followup.send(
-            "No beliefs to share." + (" Try a different topic." if topic else ""),
-            ephemeral=True
-        )
-        return
-
-    # Build the shareable embed
-    embed = discord.Embed(
-        title=f"🧠 {interaction.user.display_name}'s {title}",
-        color=discord.Color.blue()
-    )
-
-    # Group by topic if not filtering by topic
-    if not topic and len(beliefs) > 5:
-        # Show top beliefs by importance
-        sorted_beliefs = sorted(beliefs, key=lambda b: b.get('importance', 3), reverse=True)[:8]
-        belief_lines = []
-        for b in sorted_beliefs:
-            imp = importance_stars(b.get('importance', 3))
-            conf = confidence_bar(b.get('confidence', 0.5))
-            statement = b['statement'][:80] + "..." if len(b['statement']) > 80 else b['statement']
-            belief_lines.append(f"{imp} [{conf}] {statement}")
-        embed.description = "\n".join(belief_lines)
-        if len(beliefs) > 8:
-            embed.set_footer(text=f"Showing top 8 of {len(beliefs)} beliefs")
-    else:
-        belief_lines = []
-        for b in beliefs[:10]:
-            imp = importance_stars(b.get('importance', 3))
-            conf = confidence_bar(b.get('confidence', 0.5))
-            statement = b['statement'][:80] + "..." if len(b['statement']) > 80 else b['statement']
-            belief_lines.append(f"{imp} [{conf}] {statement}")
-        embed.description = "\n".join(belief_lines)
-        if len(beliefs) > 10:
-            embed.set_footer(text=f"Showing 10 of {len(beliefs)} beliefs")
-
-    # Also create text version for copying
-    text_version = f"**{interaction.user.display_name}'s {title}**\n"
-    text_version += "```\n"
-    for b in (beliefs[:10] if len(beliefs) > 10 else beliefs):
-        imp = importance_stars(b.get('importance', 3))
-        conf = confidence_bar(b.get('confidence', 0.5))
-        statement = b['statement'][:60] + "..." if len(b['statement']) > 60 else b['statement']
-        text_version += f"{imp} [{conf}] {statement}\n"
-    text_version += "```"
-    text_version += "\n*Mapped with Kodak*"
-
-    # Show preview
-    await interaction.followup.send(
-        "**Preview of your shareable snapshot:**",
-        embed=embed,
-        ephemeral=True
-    )
-
-    # Send text version as copyable
-    await interaction.followup.send(
-        "**Copy-paste version:**\n" + text_version +
-        "\n\n*To post this publicly, copy the text above and paste in any channel.*",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="compare", description="Compare your beliefs with another user")
-@app_commands.describe(user="The user to compare with")
-async def compare_command(interaction: discord.Interaction, user: discord.User):
-    """Request a belief comparison with another user."""
-    if user.id == interaction.user.id:
-        await interaction.response.send_message(
-            "You can't compare with yourself! Use `/tensions` to find internal contradictions.",
-            ephemeral=True
-        )
-        return
-
-    if user.bot:
-        await interaction.response.send_message(
-            "Can't compare beliefs with a bot.",
-            ephemeral=True
-        )
-        return
-
-    # Check if they have beliefs to share
-    my_beliefs = await get_shareable_beliefs(str(interaction.user.id))
-    if not my_beliefs:
-        await interaction.response.send_message(
-            "You don't have any shareable beliefs yet. Chat with me first to build your belief map!",
-            ephemeral=True
-        )
-        return
-
-    # Check if there's already an accepted comparison
-    existing = await get_accepted_comparison(str(interaction.user.id), str(user.id))
-    if existing:
-        await interaction.response.send_message(
-            f"You already have an active comparison with {user.display_name}. "
-            f"Use `/compare-view {user.display_name}` to see it again.",
-            ephemeral=True
-        )
-        return
-
-    # Create the request
-    result = await create_comparison_request(str(interaction.user.id), str(user.id))
-
-    if result["status"] == "already_pending":
-        await interaction.response.send_message(
-            f"You already have a pending request to {user.display_name}. Waiting for their response.",
-            ephemeral=True
-        )
-        return
-
-    # Try to DM the target user
-    try:
-        embed = discord.Embed(
-            title="🔄 Belief Comparison Request",
-            description=f"*Kodak maps what you believe through conversation.*\n\n"
-                       f"**{interaction.user.display_name}** wants to compare belief maps with you.\n\n"
-                       f"If you accept, you'll both see:\n"
-                       f"• Where you agree\n"
-                       f"• Where you differ\n"
-                       f"• A similarity score\n\n"
-                       f"Only beliefs marked 'shareable' are visible (use `/privacy` to control this).",
-            color=discord.Color.blue()
-        )
-        embed.set_footer(text="New to Kodak? Just DM me to start mapping your beliefs.")
-
-        view = ComparisonRequestView(
-            result["id"],
-            str(interaction.user.id),
-            interaction.user.display_name
-        )
-
-        await user.send(embed=embed, view=view)
-
-        await interaction.response.send_message(
-            f"📤 Comparison request sent to {user.display_name}!\n"
-            f"They'll need to accept before you can see results.",
-            ephemeral=True
-        )
-
-    except discord.errors.Forbidden:
-        await interaction.response.send_message(
-            f"Couldn't send request to {user.display_name} — they may have DMs disabled.",
-            ephemeral=True
-        )
-
-
-@bot.tree.command(name="requests", description="See pending comparison requests")
-async def requests_command(interaction: discord.Interaction):
-    """Show pending comparison requests."""
-    requests = await get_pending_requests(str(interaction.user.id))
-
-    if not requests:
-        await interaction.response.send_message(
-            "No pending comparison requests.\n"
-            "Use `/compare @user` to request a comparison with someone.",
-            ephemeral=True
-        )
-        return
-
-    embed = discord.Embed(
-        title="📥 Pending Comparison Requests",
-        color=discord.Color.blue()
-    )
-
-    for req in requests[:5]:
-        requester_name = req.get('requester_username', 'Unknown')
-        requested_at = req.get('requested_at', '')[:10]
-        embed.add_field(
-            name=f"From: {requester_name}",
-            value=f"Requested: {requested_at}\n"
-                  f"Use buttons below to respond",
-            inline=False
-        )
-
-    # Add view with buttons for the first request
-    if requests:
-        first_req = requests[0]
-        view = ComparisonRequestView(
-            first_req['id'],
-            first_req['requester_id'],
-            first_req.get('requester_username', 'Unknown')
-        )
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-    else:
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="bridging", description="See your bridging score — how well you connect across differences")
-async def bridging_command(interaction: discord.Interaction):
-    """Show the user's bridging score and bridging beliefs."""
-    await interaction.response.defer(ephemeral=True)
-
-    bridging = await get_bridging_score(str(interaction.user.id))
-
-    if bridging['comparisons_count'] == 0:
-        await interaction.followup.send(
-            "**🌉 Your Bridging Profile**\n\n"
-            "No comparisons yet! Your bridging score is calculated from "
-            "how often you find common ground with people who are different from you.\n\n"
-            "Use `/compare @user` to start comparing beliefs with others.",
-            ephemeral=True
-        )
-        return
-
-    score_pct = int(bridging['score'] * 100)
-    score_bar = "█" * (score_pct // 10) + "░" * (10 - score_pct // 10)
-
-    # Interpret the score
-    if score_pct >= 70:
-        interpretation = "You're a natural bridge-builder. You find common ground even with people who think differently."
-    elif score_pct >= 40:
-        interpretation = "You can connect across differences when you try. Keep exploring different perspectives."
-    else:
-        interpretation = "You tend to connect with people similar to you. Try comparing with people who seem different!"
-
-    response = f"**🌉 Your Bridging Profile**\n\n"
-    response += f"**Bridging Score:** [{score_bar}] {score_pct}%\n\n"
-    response += f"*{interpretation}*\n\n"
-
-    response += f"**Stats:**\n"
-    response += f"• Comparisons completed: {bridging['comparisons_count']}\n"
-    response += f"• Found common ground despite differences: {bridging['bridging_comparisons']} times\n"
-    response += f"• Total bridging agreements: {bridging['total_bridging_agreements']}\n"
-
-    # Show bridging beliefs if any
-    if bridging['bridging_beliefs']:
-        response += f"\n**Your Bridging Beliefs** (shared with people who differ from you):\n"
-        for bb in bridging['bridging_beliefs'][:5]:
-            imp = importance_stars(bb.get('importance', 3))
-            stmt = bb['statement'][:50]
-            if len(bb['statement']) > 50:
-                stmt += "..."
-            response += f"• {imp} *\"{stmt}\"*\n"
-
-    response += "\n*High bridging scores indicate you can appreciate ideas across divides — valuable for productive dialogue.*"
-
-    if len(response) > 2000:
-        response = response[:1997] + "..."
-
-    await interaction.followup.send(response, ephemeral=True)
-
-
-@bot.tree.command(name="privacy", description="Control which beliefs are shareable")
-@app_commands.describe(
-    belief_id="Belief ID to change (optional)",
-    visibility="Visibility level: public, shareable, private, hidden",
-    topic="Set visibility for all beliefs with this topic (optional)"
-)
-@app_commands.autocomplete(belief_id=belief_autocomplete, topic=topic_autocomplete)
-async def privacy_command(
-    interaction: discord.Interaction,
-    belief_id: str = None,
-    visibility: str = None,
-    topic: str = None
-):
-    """View or change belief visibility settings."""
     user_id = str(interaction.user.id)
+    tensions = await get_all_tensions(user_id)
 
-    # If no arguments, show breakdown
-    if not belief_id and not visibility and not topic:
-        breakdown = await get_visibility_breakdown(user_id)
-        total = sum(breakdown.values())
-
-        response = "**🔒 Your Belief Privacy Settings**\n\n"
-        response += f"**PUBLIC** (anyone can see): {breakdown['public']} beliefs\n"
-        response += f"**SHAREABLE** (shared in comparisons): {breakdown['shareable']} beliefs\n"
-        response += f"**PRIVATE** (only you): {breakdown['private']} beliefs\n"
-        response += f"**HIDDEN** (excluded from everything): {breakdown['hidden']} beliefs\n"
-        response += f"\n*Total: {total} beliefs*\n\n"
-
-        response += "**Usage:**\n"
-        response += "`/privacy [belief_id] [visibility]` — change one belief\n"
-        response += "`/privacy topic:[topic] [visibility]` — change all beliefs on a topic\n"
-        response += "\n*When you `/share-export`, only public/shareable beliefs are included.*"
-
-        await interaction.response.send_message(response, ephemeral=True)
-        return
-
-    # Validate visibility if provided
-    valid_levels = ('public', 'shareable', 'private', 'hidden')
-    if visibility and visibility.lower() not in valid_levels:
-        await interaction.response.send_message(
-            f"Invalid visibility. Choose: {', '.join(valid_levels)}",
-            ephemeral=True
-        )
-        return
-
-    visibility = visibility.lower() if visibility else None
-
-    # Set topic visibility
-    if topic and visibility:
-        count = await set_topic_visibility(user_id, topic, visibility)
-        if count > 0:
-            await interaction.response.send_message(
-                f"Updated {count} belief(s) about '{topic}' to **{visibility}**.",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                f"No beliefs found with topic '{topic}'.",
-                ephemeral=True
-            )
-        return
-
-    # Set individual belief visibility
-    if belief_id and visibility:
-        beliefs = await get_user_beliefs(user_id)
-        matching = [b for b in beliefs if b["id"].startswith(belief_id)]
-
-        if not matching:
-            await interaction.response.send_message(
-                f"No belief found starting with `{belief_id}`.",
-                ephemeral=True
-            )
-            return
-
-        if len(matching) > 1:
-            await interaction.response.send_message(
-                f"Multiple beliefs match `{belief_id}`. Be more specific.",
-                ephemeral=True
-            )
-            return
-
-        belief = matching[0]
-        success = await set_belief_visibility(belief["id"], user_id, visibility)
-
-        if success:
-            stmt = belief['statement'][:50]
-            if len(belief['statement']) > 50:
-                stmt += "..."
-            await interaction.response.send_message(
-                f"Updated to **{visibility}**:\n*\"{stmt}\"*",
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message("Couldn't update that belief.", ephemeral=True)
-        return
-
-    # Missing required params
-    await interaction.response.send_message(
-        "Please provide both a belief_id (or topic) and visibility level.\n"
-        "Example: `/privacy abc123 private` or `/privacy topic:politics private`",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="share-export", description="Export only shareable beliefs (for comparison)")
-@app_commands.describe(topic="Only export beliefs about this topic (optional)")
-@app_commands.autocomplete(topic=topic_autocomplete)
-async def share_export_command(interaction: discord.Interaction, topic: str = None):
-    """Export shareable beliefs as JSON for sharing with others."""
-    await interaction.response.defer(ephemeral=True)
-
-    beliefs = await get_shareable_beliefs(str(interaction.user.id))
-
-    if topic:
-        beliefs = [b for b in beliefs if topic.lower() in [t.lower() for t in b.get('topics', [])]]
-
-    if not beliefs:
+    if not tensions:
         await interaction.followup.send(
-            "No shareable beliefs to export." +
-            (f" (filtered by topic: {topic})" if topic else "") +
-            "\n\nUse `/privacy` to mark beliefs as shareable.",
+            "No tensions found in your belief map.\n\n"
+            "This could mean your beliefs are consistent, or I haven't "
+            "detected any contradictions yet. Keep journaling and I'll "
+            "notice if something doesn't quite fit together.",
             ephemeral=True
         )
         return
 
-    # Build export data (simplified for sharing)
-    export_data = {
-        "username": interaction.user.display_name,
-        "exported_at": datetime.now().isoformat(),
-        "belief_count": len(beliefs),
-        "topic_filter": topic,
-        "beliefs": [
-            {
-                "id": b["id"],
-                "statement": b["statement"],
-                "confidence": b.get("confidence", 0.5),
-                "importance": b.get("importance", 3),
-                "topics": b.get("topics", []),
-                "source_type": b.get("source_type")
-            }
-            for b in beliefs
-        ]
-    }
+    response = "**Tensions in Your Belief Map**\n\n"
+    response += "*These beliefs might be in tension with each other. "
+    response += "Exploring contradictions can lead to deeper understanding.*\n\n"
 
-    # Build preview embed
+    for i, t in enumerate(tensions[:5], 1):
+        src_imp = "⭐" * t.get('source_importance', 3)
+        tgt_imp = "⭐" * t.get('target_importance', 3)
+
+        src_stmt = t['source_statement'][:60]
+        if len(t['source_statement']) > 60:
+            src_stmt += "..."
+
+        tgt_stmt = t['target_statement'][:60]
+        if len(t['target_statement']) > 60:
+            tgt_stmt += "..."
+
+        response += f"**Tension {i}:**\n"
+        response += f"{src_imp} *\"{src_stmt}\"*\n"
+        response += f"  vs\n"
+        response += f"{tgt_imp} *\"{tgt_stmt}\"*\n\n"
+
+    if len(tensions) > 5:
+        response += f"\n*...and {len(tensions) - 5} more tension(s)*"
+
+    if len(response) > 2000:
+        response = response[:1997] + "..."
+
+    await interaction.followup.send(response, ephemeral=True)
+
+
+@bot.tree.command(name="help", description="Show available commands")
+async def help_command(interaction: discord.Interaction):
+    """Show help information."""
     embed = discord.Embed(
-        title="📤 Export Preview",
-        description=f"**{len(beliefs)} belief(s)** will be included" +
-                    (f" (topic: {topic})" if topic else ""),
-        color=discord.Color.blue()
-    )
-
-    # Show preview of beliefs that will be exported
-    preview_lines = []
-    for b in beliefs[:8]:
-        stmt = b['statement'][:50]
-        if len(b['statement']) > 50:
-            stmt += "..."
-        imp = importance_stars(b.get('importance', 3))
-        preview_lines.append(f"{imp} {stmt}")
-
-    embed.add_field(
-        name="Beliefs to export:",
-        value="\n".join(preview_lines) if preview_lines else "None",
-        inline=False
-    )
-
-    if len(beliefs) > 8:
-        embed.set_footer(text=f"...and {len(beliefs) - 8} more")
-
-    embed.add_field(
-        name="⚠️ Privacy reminder",
-        value="Only 'public' and 'shareable' beliefs are included.\n"
-              "Use `/privacy` to adjust visibility before exporting.",
-        inline=False
-    )
-
-    # Create view with download button
-    filename = f"kodak_shareable_{interaction.user.id}.json"
-    view = ShareExportView(export_data, filename)
-
-    await interaction.followup.send(
-        embed=embed,
-        view=view,
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="compare-file", description="Compare your beliefs with someone's exported file")
-@app_commands.describe(file="The JSON file from someone's /share-export")
-async def compare_file_command(interaction: discord.Interaction, file: discord.Attachment):
-    """Compare local beliefs with an imported file."""
-    await interaction.response.defer(ephemeral=True)
-
-    # Validate file
-    if not file.filename.endswith('.json'):
-        await interaction.followup.send(
-            "Please attach a JSON file from `/share-export`.",
-            ephemeral=True
-        )
-        return
-
-    if file.size > 1_000_000:  # 1MB limit
-        await interaction.followup.send(
-            "File too large. Maximum size is 1MB.",
-            ephemeral=True
-        )
-        return
-
-    # Download and parse
-    try:
-        content = await file.read()
-        imported_data = json.loads(content.decode('utf-8'))
-    except discord.HTTPException:
-        await interaction.followup.send(
-            "Couldn't download that file. Please try again.",
-            ephemeral=True
-        )
-        return
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        await interaction.followup.send(
-            "Couldn't parse that file. Make sure it's from `/share-export`.",
-            ephemeral=True
-        )
-        return
-
-    # Validate structure
-    if 'beliefs' not in imported_data or not isinstance(imported_data['beliefs'], list):
-        await interaction.followup.send(
-            "Invalid file format. Make sure it's from `/share-export`.",
-            ephemeral=True
-        )
-        return
-
-    imported_beliefs = imported_data['beliefs']
-    imported_username = imported_data.get('username', 'Unknown')
-
-    # Validate each belief has required fields
-    valid_beliefs = []
-    for belief in imported_beliefs:
-        if isinstance(belief, dict) and 'statement' in belief:
-            # Ensure required fields exist with defaults
-            valid_beliefs.append({
-                'id': belief.get('id', str(uuid.uuid4())),
-                'statement': belief['statement'],
-                'confidence': belief.get('confidence', 0.5),
-                'importance': belief.get('importance', 3),
-                'topics': belief.get('topics', []),
-                'source_type': belief.get('source_type')
-            })
-
-    if not valid_beliefs:
-        await interaction.followup.send(
-            "No valid beliefs found in file. Each belief needs at least a 'statement' field.",
-            ephemeral=True
-        )
-        return
-
-    imported_beliefs = valid_beliefs
-
-    if not imported_beliefs:
-        await interaction.followup.send(
-            "The imported file has no beliefs.",
-            ephemeral=True
-        )
-        return
-
-    # Get local shareable beliefs
-    my_beliefs = await get_shareable_beliefs(str(interaction.user.id))
-
-    if not my_beliefs:
-        await interaction.followup.send(
-            "You don't have any shareable beliefs yet. Chat with me first!",
-            ephemeral=True
-        )
-        return
-
-    # Calculate similarity
-    comparison = await calculate_belief_similarity(my_beliefs, imported_beliefs)
-
-    # Build result embed
-    overall_pct = int(comparison['overall_similarity'] * 100)
-    core_pct = int(comparison['core_similarity'] * 100)
-
-    embed = discord.Embed(
-        title=f"🔄 Belief Comparison: You ↔ {imported_username}",
-        color=discord.Color.blue()
+        title="Kodak Commands",
+        description="Reflective journaling companion",
+        color=0x7289da
     )
 
     embed.add_field(
-        name="📊 Similarity",
-        value=f"**Overall:** {overall_pct}%\n**Core beliefs:** {core_pct}%",
-        inline=True
-    )
-
-    embed.add_field(
-        name="📈 Belief Counts",
-        value=f"**Yours:** {len(my_beliefs)}\n**Theirs:** {len(imported_beliefs)}",
-        inline=True
-    )
-
-    if comparison.get('summary'):
-        embed.add_field(
-            name="Summary",
-            value=comparison['summary'],
-            inline=False
-        )
-
-    # Agreements
-    if comparison['agreements']:
-        agreement_text = ""
-        for ag in comparison['agreements'][:3]:
-            stmt = ag['belief_a']['statement'][:60]
-            if len(ag['belief_a']['statement']) > 60:
-                stmt += "..."
-            agreement_text += f"🤝 *\"{stmt}\"*\n"
-        embed.add_field(
-            name=f"Agreements ({len(comparison['agreements'])})",
-            value=agreement_text or "None",
-            inline=False
-        )
-
-    # Differences
-    if comparison['differences']:
-        diff_text = ""
-        for df in comparison['differences'][:3]:
-            stmt_a = df['belief_a']['statement'][:35]
-            stmt_b = df['belief_b']['statement'][:35]
-            diff_text += f"⚡ *\"{stmt_a}...\"* vs *\"{stmt_b}...\"*\n"
-        embed.add_field(
-            name=f"Differences ({len(comparison['differences'])})",
-            value=diff_text or "None",
-            inline=False
-        )
-
-    embed.set_footer(text=f"Compared with file from {imported_username}")
-
-    await interaction.followup.send(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="pause", description="Pause belief tracking")
-async def pause_command(interaction: discord.Interaction):
-    """Pause belief tracking."""
-    await set_tracking_paused(str(interaction.user.id), True)
-    await interaction.response.send_message(
-        "Belief tracking paused. We can still chat—I just won't be taking notes.\n"
-        "Use `/resume` whenever you're ready to start mapping again.",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="resume", description="Resume belief tracking")
-async def resume_command(interaction: discord.Interaction):
-    """Resume belief tracking."""
-    await set_tracking_paused(str(interaction.user.id), False)
-    await interaction.response.send_message(
-        "Tracking resumed! I'll start mapping our conversations again.",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="export", description="Download all your data")
-async def export_command(interaction: discord.Interaction):
-    """Export all user data as JSON."""
-    await interaction.response.defer(ephemeral=True)
-
-    data = await export_user_data(str(interaction.user.id))
-
-    # Create a file
-    json_str = json.dumps(data, indent=2, default=str)
-
-    if len(json_str) > 8_000_000:  # Discord file size limit
-        await interaction.followup.send(
-            "Your data is too large to export directly. Please contact support.",
-            ephemeral=True
-        )
-        return
-
-    file = discord.File(
-        fp=__import__('io').BytesIO(json_str.encode()),
-        filename=f"kodak_export_{interaction.user.id}.json"
-    )
-
-    await interaction.followup.send(
-        "Here's all your data. This includes your beliefs, conversation history, and settings.",
-        file=file,
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="clear", description="Delete all your data")
-async def clear_command(interaction: discord.Interaction):
-    """Delete all user data with confirmation."""
-    embed = discord.Embed(
-        title="Are you sure?",
-        description=(
-            "This will permanently delete:\n"
-            "• All your beliefs\n"
-            "• Your conversation history\n"
-            "• Your personality settings\n\n"
-            "This cannot be undone."
+        name="📅 Scheduling",
+        value=(
+            "`/schedule [time]` — Set daily check-in time\n"
+            "`/skip` — Skip today's check-in\n"
+            "`/pause` — Pause all check-ins\n"
+            "`/resume` — Resume check-ins\n"
+            "`/journal` — Start a session now\n"
+            "`/timezone [tz]` — Set your timezone"
         ),
-        color=discord.Color.red()
+        inline=False
     )
 
-    view = ConfirmClearView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-@bot.tree.command(name="style", description="Fine-tune personality dimensions")
-@app_commands.describe(
-    warmth="1 (analytical) to 5 (warm)",
-    directness="1 (gentle) to 5 (blunt)",
-    playfulness="1 (serious) to 5 (playful)",
-    formality="1 (casual) to 5 (formal)"
-)
-async def style_command(
-    interaction: discord.Interaction,
-    warmth: int = None,
-    directness: int = None,
-    playfulness: int = None,
-    formality: int = None
-):
-    """Fine-tune personality dimensions."""
-    for name, val in [("warmth", warmth), ("directness", directness),
-                      ("playfulness", playfulness), ("formality", formality)]:
-        if val is not None and (val < 1 or val > 5):
-            await interaction.response.send_message(
-                f"{name} must be between 1 and 5.",
-                ephemeral=True
-            )
-            return
-
-    await get_or_create_user(str(interaction.user.id), interaction.user.name)
-    user = await update_user_personality(
-        str(interaction.user.id),
-        warmth=warmth,
-        directness=directness,
-        playfulness=playfulness,
-        formality=formality
+    embed.add_field(
+        name="🎭 Personality",
+        value=(
+            "`/setup` — Change personality preference\n"
+            "`/depth` — Set session depth (quick/standard/deep)\n"
+            "`/style` — View your personality dimensions"
+        ),
+        inline=False
     )
 
-    # Visual representation
-    def bar(val):
-        return "█" * val + "░" * (5 - val)
-
-    await interaction.response.send_message(
-        f"**Your Style:**\n"
-        f"```\n"
-        f"Warmth:      [{bar(user['warmth'])}] {user['warmth']}/5\n"
-        f"Directness:  [{bar(user['directness'])}] {user['directness']}/5\n"
-        f"Playfulness: [{bar(user['playfulness'])}] {user['playfulness']}/5\n"
-        f"Formality:   [{bar(user['formality'])}] {user['formality']}/5\n"
-        f"```",
-        ephemeral=True
+    embed.add_field(
+        name="📋 Beliefs",
+        value=(
+            "`/map` — See your belief map by topic\n"
+            "`/beliefs` — List all your beliefs\n"
+            "`/belief [id]` — View a belief in detail\n"
+            "`/explore [topic]` — Explore beliefs about a topic\n"
+            "`/core` — Show your most important beliefs"
+        ),
+        inline=False
     )
 
+    embed.add_field(
+        name="✏️ Edit Beliefs",
+        value=(
+            "`/confidence [id] [level]` — Update belief confidence\n"
+            "`/mark [id] [importance]` — Set belief importance\n"
+            "`/forget [id]` — Delete a belief\n"
+            "`/undo` — Restore last deleted belief"
+        ),
+        inline=False
+    )
 
-@bot.tree.command(name="backup", description="Download a backup of the database")
-async def backup_command(interaction: discord.Interaction):
-    """Send the database file as a backup."""
-    await interaction.response.defer(ephemeral=True)
+    embed.add_field(
+        name="📊 History & Analysis",
+        value=(
+            "`/history [id]` — See how a belief evolved\n"
+            "`/changes [days]` — See recent belief changes\n"
+            "`/tensions` — Show potentially conflicting beliefs"
+        ),
+        inline=False
+    )
 
-    from db import DB_PATH
-    import shutil
-    from io import BytesIO
+    embed.add_field(
+        name="🎯 Values",
+        value=(
+            "`/values` — See your value profile\n"
+            "`/values-history` — See how values changed over time\n"
+            "`/share-values` — Export your values to share\n"
+            "`/compare-file` — Compare with someone's export"
+        ),
+        inline=False
+    )
 
-    if not DB_PATH.exists():
-        await interaction.followup.send(
-            "No database found to backup.",
-            ephemeral=True
-        )
-        return
+    embed.add_field(
+        name="🔒 Privacy & Data",
+        value=(
+            "`/export` — Download all your data (JSON)\n"
+            "`/clear` — Delete everything"
+        ),
+        inline=False
+    )
 
-    # Read the database file
-    try:
-        with open(DB_PATH, 'rb') as f:
-            db_content = f.read()
+    embed.set_footer(text="Just message me anytime to start journaling")
 
-        # Check file size (Discord limit is 25MB for most servers)
-        if len(db_content) > 25_000_000:
-            await interaction.followup.send(
-                "Database is too large to send via Discord (>25MB).\n"
-                f"You can find it at: `{DB_PATH}`",
-                ephemeral=True
-            )
-            return
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file = discord.File(
-            fp=BytesIO(db_content),
-            filename=f"kodak_backup_{timestamp}.db"
-        )
 
-        await interaction.followup.send(
-            f"**📦 Database Backup**\n"
-            f"Size: {len(db_content) / 1024:.1f} KB\n"
-            f"To restore: replace `{DB_PATH.name}` with this file.",
-            file=file,
-            ephemeral=True
-        )
-
-    except Exception as e:
-        await interaction.followup.send(
-            f"Couldn't create backup: {e}",
-            ephemeral=True
-        )
-
+# ============================================
+# RUN
+# ============================================
 
 def main():
     """Run the bot."""
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        print("Error: DISCORD_TOKEN not found in environment")
+        logger.error("DISCORD_TOKEN not found in environment")
         return
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: ANTHROPIC_API_KEY not found in environment")
-        return
-
+    logger.info("Starting Kodak v2...")
     bot.run(token)
 
 

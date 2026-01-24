@@ -1,988 +1,915 @@
-# Kodak: Belief Mapping Bot
+# Kodak v2.0: Reflective Journaling Companion
 
-> A Discord bot that maps the belief networks of users through engaging, natural conversation.
+> A Discord bot that helps you reflect on your day and, over time, reveals the values and beliefs that shape how you see the world.
 
-## Name
+## The Pivot
 
-**Kodak** — capturing beliefs, developing a picture of someone's mind. Like developing film, the image emerges slowly over time.
+Kodak v1 was a "belief mapping bot" — you chatted with it, and it extracted your beliefs. The problem: **why would anyone consistently talk to it?**
 
-(Note: Eastman Kodak the camera company still exists. Fine for personal/open-source use; reconsider if commercializing.)
+v2 reframes around **reflective journaling**:
+- The bot prompts you daily at a time you choose
+- You reflect on your day through conversation
+- Beliefs and values are extracted as a byproduct
+- Over time, you see patterns in what you value and believe
+
+The core insight remains: through conversation, build a map of someone's mind. But now there's a reason to show up every day.
+
+---
 
 ## Vision
 
-Through curious, stylish dialogue, Kodak gradually builds a map of everything a user believes and why—their assumptions, reasoning chains, contradictions, and how their thinking evolves over time.
+Kodak is a journaling companion that makes reflection effortless.
+
+**For the user:**
+- Daily prompts eliminate the blank-page problem
+- Conversation draws out more than you'd write alone
+- You see your beliefs and values emerge over time
+- You notice how your thinking evolves
+
+**What makes it different from other journaling apps:**
+- Conversational, not form-based
+- Adapts to your personality preference
+- Extracts structured insights (beliefs, values) from unstructured reflection
+- Enables comparison with others based on values, not surface-level statements
 
 ---
 
 ## Foundational Insights
 
-### Andy Matuschak — Evergreen Notes
-*[notes.andymatuschak.org](https://notes.andymatuschak.org/Evergreen_notes)*
+*These remain from v1 — they're even more relevant for journaling.*
 
-- "Better note-taking misses the point; what matters is **better thinking**"
-- Notes (beliefs) should be **atomic**: one idea per node
-- Prefer **associative ontologies over hierarchical taxonomies**—mirrors how brains work
-- Notes should "evolve, contribute, and accumulate" over time
-- Writing forces sharper understanding—articulating a belief clarifies it
+### Andy Matuschak — Evergreen Notes
+- "Writing forces sharper understanding—articulating a belief clarifies it"
+- This is exactly what journaling does. The bot's probing questions force articulation.
 
 ### Michael Nielsen — Augmenting Cognition
-*[cognitivemedium.com/tat](https://cognitivemedium.com/tat/)*, *[augmentingcognition.com](https://augmentingcognition.com/)*
-
-- **Cognitive technology**: external artifacts that become substrates for cognition
-- Goal isn't solving problems in existing terms—it's **"changing the thoughts we can think"**
-- The best tools create new "elements of cognition"—things you can think *with*
 - Spaced repetition: revisiting beliefs over time aids retention and evolution
-
-### Gordon Brander — Subconscious & Noosphere
-*[newsletter.squishy.computer](https://newsletter.squishy.computer/p/noosphere-a-protocol-for-thought)*
-
-- "Today, if you want to amplify intelligence, you probably wouldn't build a decentralized notes graph, **you would go to work on personal AI**"
-- Knowledge structures as graphs of connected ideas
-- OODA loops (Observe, Orient, Decide, Act) for thinking
-- This project IS the pivot Brander identified—AI as the medium for thought augmentation
+- Daily journaling IS spaced repetition for self-knowledge.
 
 ### Philip Tetlock — Superforecasting
-*[goodjudgment.com](https://goodjudgment.com/philip-tetlocks-10-commandments-of-superforecasting/)*
-
-- Superforecasters are **open-minded, careful, curious, and above all self-critical**
-- **Belief updating**: "Getting closer to truth gradually by updating in proportion to evidence"
-- Two dangers: underreaction (belief perseverance) vs overreaction
-- **Calibration**: Do confidence levels match reality?
-- **Foxes beat hedgehogs**: many small ideas > one big idea
-- Commitment to self-improvement is the strongest predictor of accuracy
+- Belief updating: "Getting closer to truth gradually"
+- Journaling tracks this evolution. "Six months ago you said X. Still feel that way?"
 
 ### Julia Galef — Scout Mindset
-*[juliagalef.com](https://juliagalef.com/)*, *[The Scout Mindset](https://www.amazon.com/Scout-Mindset-Perils-Defensive-Thinking/dp/0735217556)*
+- Scouts want accurate maps of reality
+- Journaling builds an accurate map of your own mind — values, beliefs, contradictions.
 
-- Scout mindset = "the motivation to see things as they are, not as you wish they were"
-- **Scouts want accurate maps**, soldiers want to defend territory
-- When beliefs become **identity**, they calcify—"holding identity lightly" enables updating
-- Scouts feel *pleasure* when they learn new information, *intrigued* by contradictions
-- Self-awareness test: Can you point to times you were in soldier mindset?
-
-### Maggie Appleton — Digital Gardens
-*[maggieappleton.com/garden](https://maggieappleton.com/garden/)*
-
-- Digital gardens: "imperfect notes growing slowly over time... public learning"
-- **Contextual associations** over chronological organization
-- Exploratory and evolving—not polished final products
-- Visual explanations are powerful
-- Lodestone project: LLMs guiding "a process of understanding claims, evidence, and argument structure"
+### Gordon Brander — AI as the Medium
+- "If you want to amplify intelligence, you would go to work on personal AI"
+- The bot is a thinking partner, not just a note-taker.
 
 ---
 
 ## Design Principles
 
-### 1. The Bot is a Cartographer, Not a Prosecutor
-*(from Galef's scout mindset)*
+### 1. The Bot Prompts, The User Reflects
+The bot initiates. The user just responds. This inverts the cold-start problem.
 
-The bot's goal is to help users see their own belief landscape clearly—not to challenge, judge, or change beliefs. Curiosity, not confrontation. "Tell me more about that" not "but have you considered..."
+### 2. Conversation Draws Out More Than Writing Alone
+A follow-up question ("What made that frustrating?") surfaces things a blank page wouldn't.
 
-### 2. Beliefs are Atomic, Linked, and Evolving
-*(from Matuschak's evergreen notes)*
+### 3. Beliefs and Values Are Byproducts, Not The Pitch
+Users come for "easy journaling." They stay for "wow, I can see what I actually value."
 
-Each belief is a discrete node. Connections emerge through conversation. The graph grows organically. Old beliefs can be revisited and updated. Nothing is "final."
+### 4. Adapt to Response Depth
+Some days: "Fine, nothing special." Some days: paragraphs. The bot adapts.
 
-### 3. The Conversation IS the Interface
-*(from Brander's insight about AI as the medium)*
+### 5. Warmth Without Sycophancy
+*(Carried from v1 — still critical)*
 
-The dialogue is the primary interface for both extraction and exploration. The graph is the backend representation, but the experience is conversational.
+The bot accepts the person fully while questioning their ideas freely. No empty validation. Honest reflection requires honest responses.
 
-### 4. Surface Contradictions as Curiosities, Not Attacks
-*(from Tetlock + Galef)*
+### 6. Surface Patterns as Curiosities
+"I noticed you've mentioned your sister three times this week" — not judgment, just observation.
 
-When the bot notices tension between beliefs, surface it gently as interesting, not as a gotcha. "I noticed you said X earlier, and now Y—how do you think about the relationship between those?"
+### 7. Values Enable Meaningful Comparison
+Raw belief text is too variable. Derived values (Schwartz framework) enable real comparison.
 
-### 5. Track Confidence and Source
-*(from Tetlock on calibration)*
-
-Not all beliefs are equal. "I'm certain that..." vs "I vaguely feel like..." vs "my parents always said...". The graph captures this metadata.
-
-### 6. Identity-Adjacent Beliefs Need Special Care
-*(from Galef on identity)*
-
-Political beliefs, religious beliefs, beliefs about self—these are often identity-fused. Recognize sensitive territory and tread thoughtfully.
-
-### 7. Make the Map Explorable
-*(from Appleton on visualization)*
-
-Users should be able to wander their own belief garden. See clusters, trace connections, notice gaps. The visual/exploratory layer is key.
-
-### 8. Revisit and Evolve
-*(from Nielsen on spaced repetition)*
-
-Periodically resurface old beliefs. "Six months ago you said X. Still feel that way?" Track evolution over time.
-
-### 9. Warmth Without Sycophancy
-*(from Adam Grant, Kim Scott, Carl Rogers, AI safety research)*
-
-This is a core design principle, not an afterthought. The bot must be warm AND honest—never choosing validation over truth.
-
-**Sources:**
-- **Adam Grant's "Disagreeable Givers"**: The most valuable people "challenge because they care." They're "gruff on the surface but have others' best interests at heart."
-- **Kim Scott's Radical Candor**: The 2x2 of Care Personally × Challenge Directly. The danger zone is "Ruinous Empathy"—high warmth, no challenge. That's sycophancy.
-- **Carl Rogers' Congruence**: Genuineness is essential alongside warmth. Unconditional positive regard means accepting the *person*, NOT validating all their beliefs.
-- **Big Five Personality Model**: Healthy agreeableness includes *straightforwardness* (candor, no flattery). Unhealthy agreeableness is people-pleasing.
-- **AI Sycophancy Research** (Anthropic, 2024): RLHF training makes models sycophantic because users prefer agreement. Must explicitly design against this.
-
-**What this means for Kodak:**
-- Accept the person fully. Question their ideas freely.
-- If you see a flaw in reasoning, say so. That's respect.
-- Never praise just to be nice. Skip "That's a great point!" and similar.
-- Warmth and honesty are not opposites. The best friends are both.
-- The bot is a "disagreeable giver"—cares deeply, tells the truth.
-
-**Why this matters:**
-Research shows users who chat with sycophantic AI become *more confident they're right* (even when wrong), *less open to compromise*, and paradoxically describe flattering AIs as "objective." We're building a belief-mapping tool—accuracy matters more than making users feel good.
+### 8. Local-First, Privacy-First
+Data stays on user's machine. Scheduling works locally. No cloud dependency required.
 
 ---
 
-## Bot Personality System
+## Core Loop
 
-### Why These Four Dimensions?
+```
+┌─────────────────────────────────────────────────────────┐
+│                    DAILY CYCLE                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   [Scheduled time]                                      │
+│         │                                               │
+│         ▼                                               │
+│   Bot sends prompt ──► User responds                    │
+│         │                     │                         │
+│         │                     ▼                         │
+│         │              Bot probes deeper                │
+│         │                     │                         │
+│         │                     ▼                         │
+│         │              [Conversation continues]         │
+│         │                     │                         │
+│         ▼                     ▼                         │
+│   Session ends ◄────── User disengages or              │
+│         │              natural close                    │
+│         │                                               │
+│         ▼                                               │
+│   Extract beliefs + derive values                       │
+│         │                                               │
+│         ▼                                               │
+│   Update user's value profile                           │
+│         │                                               │
+│         ▼                                               │
+│   [Next day]                                            │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
 
-We needed dimensions that:
-1. **Matter for belief exploration** — affect how users open up and engage
-2. **Are independent** — can be mixed freely without contradiction
-3. **Map to real conversational differences** — users can feel the change
-4. **Don't enable sycophancy** — no dimension should encourage empty validation
+---
 
-After reviewing personality research (Big Five, HEXACO) and conversational design literature, we chose:
+## Session Flow
 
-| Dimension | Why It Matters for Belief Mapping |
-|-----------|-----------------------------------|
-| **Warmth** | Affects psychological safety. Higher warmth → users share more vulnerable beliefs. But we define warmth as caring about the *person*, not agreeing with their ideas. |
-| **Directness** | Affects how contradictions and challenges are surfaced. Low = hints and questions. High = states observations plainly. Critical for honest engagement. |
-| **Playfulness** | Affects tone and approachability. Some users open up more with humor; others prefer seriousness. Neither is more honest than the other. |
-| **Formality** | Affects language register. Casual = more like texting a friend. Formal = more like a structured interview. Changes the feel without changing honesty. |
+Each journaling session follows a flexible structure:
 
-### What We Didn't Include (and Why)
+### 1. OPENER (Low commitment)
+Get them talking with something easy. **Rotate openers** — don't use the same one every day. Build a pool of 5-10 per personality.
 
-- **"Challenge" as a dimension**: We originally had this, but renamed it to "Directness." "Challenge" implied the bot was *trying* to argue, which isn't the goal. Directness is about *how* you say things, not whether you're adversarial.
-- **"Agreeableness"**: Too close to sycophancy. We don't want a slider that makes the bot more validating.
-- **"Empathy"**: Overlaps with warmth. And true empathy includes honest feedback, so it's baked into the core, not a dial.
-- **"Intelligence" or "Depth"**: Every configuration should be intellectually engaged. This isn't a dial.
+### 2. ANCHOR (One concrete thing)
+Focus on a specific moment, event, or feeling.
 
-### How Dimensions Interact
+### 3. PROBE (Go deeper)
+Follow-up questions that draw out meaning.
 
-The magic is in combinations:
+### 4. CONNECT (If engaged)
+Link to patterns, past entries, or emerging themes.
 
-| Combination | Result |
-|-------------|--------|
-| High warmth + High directness | Caring honesty. "I hear you, and I think there's a flaw in that reasoning." |
-| High warmth + Low directness | Gentle exploration. Hints at issues through questions. |
-| Low warmth + High directness | Analytical bluntness. "That contradicts what you said earlier." |
-| High playfulness + High directness | Trickster energy. Challenges through humor and provocation. |
-| High formality + High directness | Academic rigor. Precise, structured pushback. |
+**Pattern surfacing frequency:** Max once per week. "You've mentioned your sister three times recently" is useful. Daily pattern-noting feels like surveillance.
 
-No combination should produce sycophancy. Even high warmth + low directness + high playfulness results in a friendly, gentle explorer—not a cheerleader.
+### 5. CLOSE (Explicit closure)
+The bot must **clearly signal** the session is ending. Users need this boundary.
 
-### The Dimensions
+**Closure elements:**
+- Brief reflection on what emerged: "Sounds like today was about [theme]"
+- Gratitude: "Thanks for sharing"
+- Forward hook (optional): "See you tomorrow" or "Anything you want to pick up next time?"
+
+**Example closes by personality:**
+| Personality | Closure style |
+|-------------|---------------|
+| Philosopher | "Interesting threads today. Let them sit." |
+| Best Friend | "Thanks for catching up. Talk tomorrow?" |
+| Scientist | "Good data point. We'll see what patterns emerge." |
+| Trickster | "Alright, go touch grass. See you tomorrow." |
+| Therapist | "Take care of yourself tonight. I'm here when you need me." |
+
+### Extraction Visibility
+
+**Decision:** Show extracted beliefs at session close (lightweight visibility).
+
+During the session, extraction happens silently — no interruptions. At close, include a brief note:
+
+> "Thanks for tonight. I noticed something worth remembering:
+> *'Feeling stuck at work makes me question if I'm on the right path'*
+>
+> See you tomorrow."
+
+This serves three purposes:
+1. User sees the system is working (builds trust)
+2. User can correct misunderstandings ("that's not what I meant")
+3. Reinforces the value proposition (beliefs emerge from conversation)
+
+If no clear beliefs were extracted, skip this part — just close normally. Don't force it.
+
+### Adaptive Depth
+
+**Don't rely on manual depth settings.** Infer from the conversation:
+
+- **Short responses** (< 20 words) → fewer probes, move to close
+- **Long responses** (> 100 words) → more connection, follow their energy
+- **One-word answers** → one gentle follow-up, then close without pressure
+- **User explicitly goes deep** → stay with them, extend session
+
+**Occasionally ask:** "Want to go deeper on this, or leave it there?" — gives user control without requiring upfront settings.
+
+**The depth setting (quick/standard/deep) is a ceiling, not a target.** Quick mode means never more than 3 exchanges. Standard means up to 6. Deep means follow them as long as they're engaged.
+
+### First Session Special Handling
+
+The first journal session after onboarding is different:
+- **Lighter probing** — User is still figuring out the dynamic
+- **Explicit framing if needed** — "Just tell me whatever comes to mind, there's no right way to do this"
+- **Shorter session** — Don't overwhelm; 3-4 exchanges max
+- **End with reassurance** — "That's a great start. See you tomorrow."
+
+After the first session, normal adaptive depth applies.
+
+---
+
+## Personality System (Adapted for Journaling)
+
+The four dimensions from v1 remain, but behaviors are journaling-specific.
+
+### Dimensions
 
 | Dimension | Low (1) | High (5) |
 |-----------|---------|----------|
-| **Warmth** | Analytical, idea-focused | Deeply caring, while remaining honest |
-| **Directness** | Gentle, hints rather than states | Blunt, no sugar-coating |
-| **Playfulness** | Serious, scholarly | Witty, irreverent |
-| **Formality** | Casual, chatty | Precise, structured |
+| **Warmth** | Idea-focused, analytical | Deeply caring, emotionally attuned |
+| **Directness** | Gentle, lets you lead | Names what it sees plainly |
+| **Playfulness** | Serious, reflective | Witty, light touch |
+| **Formality** | Casual, conversational | Structured, precise |
 
-Each dimension: 1-5 scale. Note that warmth is about accepting the *person*—it never means validating all their ideas. Even at warmth=5, the bot remains genuinely honest.
+### Presets (Journaling Behaviors)
 
-### Personality Presets
+| Preset | W | D | P | F | Journaling Style |
+|--------|---|---|---|---|------------------|
+| **The Philosopher** | 3 | 4 | 2 | 4 | Asks "why" and "what does that mean to you?" Probes assumptions. Treats your day as material for deeper inquiry. |
+| **The Best Friend** | 5 | 3 | 4 | 1 | Warm and real. "Ugh, that sounds annoying." Validates first, then gets curious. Makes reflection feel like venting to someone who gets it. |
+| **The Scientist** | 2 | 5 | 1 | 5 | Precise questions. "What exactly did they say?" "What happened next?" Helps you see events clearly before interpreting them. |
+| **The Trickster** | 3 | 4 | 5 | 1 | Uses humor to surface things. "Sounds like your boss is speedrunning bad management." Lightness that still lands. |
+| **The Therapist** | 5 | 3 | 2 | 3 | Reflects back without judgment. "It sounds like that really affected you." Creates safety for vulnerable reflection. |
 
-Presets are curated combinations designed for different user preferences:
+### Prompt Depth Setting
 
-| Preset | Warmth | Directness | Playfulness | Formality | Vibe |
-|--------|--------|------------|-------------|-----------|------|
-| **The Philosopher** | 3 | 4 | 2 | 4 | Thoughtful Socratic dialogue. Probes foundations. |
-| **The Best Friend** | 5 | 3 | 4 | 1 | Warm and real. The friend who cares enough to be honest. |
-| **The Scientist** | 2 | 5 | 1 | 5 | Precise and analytical. Focused on evidence and logic. |
-| **The Trickster** | 3 | 4 | 5 | 1 | Playful provocateur. Makes you think through humor. |
-| **The Therapist** | 5 | 3 | 2 | 3 | Creates safety. Accepts you fully, questions your conclusions. |
+In addition to personality, users can set prompt depth:
+- **Quick** — 2-3 exchanges, light check-in
+- **Standard** — 4-6 exchanges, moderate exploration (default)
+- **Deep** — 8+ exchanges, thorough reflection
 
-Note: All presets have directness ≥ 3. We intentionally avoided creating a "yes-man" preset.
-
----
-
-## Future Features
-
-### Belief Network Comparison (Multi-User)
-
-Allow two users to compare their belief maps:
-- **Common ground**: Where do we agree?
-- **Divergences**: Where do we differ, and why?
-- **Complementary gaps**: What does one person have mapped that the other doesn't?
-- **Potential bridges**: Beliefs that could connect if explored together
-
-Use cases:
-- Couples understanding each other better
-- Debate prep / steelmanning
-- Team alignment
-- Friend discovery ("you two should talk")
+The bot adapts based on this setting AND response length.
 
 ---
 
-## Data Model (Draft)
+## Values Framework: Schwartz's Basic Human Values
+
+We derive values from beliefs using Schwartz's empirically-validated framework.
+
+### The 10 Values (Grouped by Higher-Order Dimension)
+
+**Self-Transcendence** (concern for others' welfare)
+- **Universalism** — tolerance, social justice, equality, protecting nature
+- **Benevolence** — helpfulness, honesty, loyalty to those close to you
+
+**Conservation** (preserving stability)
+- **Tradition** — respect for customs, humility, devotion
+- **Conformity** — obedience, self-discipline, politeness
+- **Security** — safety, stability, social order
+
+**Self-Enhancement** (personal success)
+- **Achievement** — success, competence, ambition
+- **Power** — authority, wealth, social recognition
+
+**Openness to Change** (independence and novelty)
+- **Self-Direction** — creativity, freedom, independence
+- **Stimulation** — excitement, novelty, challenge
+- **Hedonism** — pleasure, enjoying life
+
+*Note: In Schwartz's circular model, Hedonism sits between Self-Enhancement and Openness to Change — it's a bridge value. For simplicity we group it under Openness, but implementation should recognize its dual nature.*
+
+### How Values Are Derived
+
+1. **Extract beliefs** from journal entries (as before)
+2. **Tag each belief** with relevant values (1-3 values per belief)
+3. **Assess mapping confidence** — how clearly does this belief map to a value?
+4. **Weight by belief confidence × mapping confidence** — uncertain beliefs or ambiguous mappings contribute less
+5. **Apply temporal decay** — recent beliefs contribute more than old ones (people change)
+6. **Aggregate over time** — build a value profile from all beliefs
+7. **Normalize** — scores from 0.0 to 1.0 for each value
+
+**Normalization method:** Normalize relative to the user's own profile — strongest value = 1.0, scale others proportionally. This makes profiles comparable even if one user has expressed more beliefs than another.
 
 ```
-BeliefNode {
-  id: string
-  user_id: string
-  statement: string              // "Money can't buy happiness"
-  confidence: float              // 0.0 - 1.0
-  source_type: enum              // experience | reasoning | authority | intuition | inherited
-  first_expressed: timestamp
-  last_referenced: timestamp
-  context: string                // what prompted this belief to surface
-  topics: string[]               // derived tags/clusters
-}
+For each value v:
+  raw_score[v] = sum of weighted contributions
+  normalized_score[v] = raw_score[v] / max(raw_score across all values)
+```
 
-BeliefRelation {
-  id: string
-  source_id: string
-  target_id: string
-  relation_type: enum            // supports | contradicts | assumes | derives_from | relates_to
-  strength: float                // how strong is this connection
-  discovered_at: timestamp
-}
+**Mapping confidence:** Not every belief clearly indicates a value. "I work hard to succeed" → high mapping confidence for Achievement. "I had a weird day" → no clear value mapping, don't force it.
 
-BeliefEvolution {
-  id: string
-  belief_id: string
-  old_confidence: float
-  new_confidence: float
-  old_statement: string?         // if the wording changed
-  new_statement: string?
-  timestamp: timestamp
-  trigger: string                // what caused the shift
-}
+**Temporal decay:** A belief from 6 months ago shouldn't weigh the same as one from yesterday. Apply exponential decay (half-life of ~3 months):
+```
+weight = base_weight × (0.5 ^ (days_ago / 90))
+```
 
-UserPersonality {
-  user_id: string
-  warmth: int                    // 1-5 (accepting the person, while honest about ideas)
-  directness: int                // 1-5 (gentle hints to blunt statements)
-  playfulness: int               // 1-5
-  formality: int                 // 1-5
-}
+Example:
+```
+Belief: "I work hard because I want to be recognized as excellent"
+Belief confidence: 0.8
+Mapping confidence: 0.9 (clear Achievement signal)
+Days ago: 30
+Temporal weight: 0.5 ^ (30/90) = 0.79
+
+Values: Achievement (primary, weight=1.0), Power (secondary, weight=0.5)
+
+Contribution to profile:
+  Achievement: 0.8 × 0.9 × 0.79 × 1.0 = 0.57
+  Power: 0.8 × 0.9 × 0.79 × 0.5 = 0.28
+```
+
+### Value Profile Display
+
+Users see their values narratively, not numerically:
+
+> **What you seem to value most:**
+>
+> You often come back to themes of **independence and self-direction** —
+> making your own choices, not being constrained by others' expectations.
+>
+> **Achievement** matters to you, but it's personal achievement —
+> being good at what you do, not status for its own sake.
+>
+> You show less emphasis on **tradition and conformity** —
+> you question inherited rules rather than accepting them.
+
+### Value Change Over Time
+
+Static profiles are less interesting than evolution. Track and surface change:
+
+> **How your values are shifting:**
+>
+> Your emphasis on **security** has increased over the past month.
+> Recent entries mention stability and planning more than before.
+>
+> **Stimulation** has decreased slightly — fewer mentions of
+> novelty-seeking compared to 3 months ago.
+
+**Implementation:** Store periodic snapshots of value profiles (weekly). Compare current profile to 1 month ago, 3 months ago. Surface significant changes (> 0.15 shift in any value).
+
+---
+
+## Comparison Model
+
+### The Problem with v1 Comparison
+
+v1 compared raw belief statements:
+- "Hard work leads to success" vs "Effort determines outcomes"
+- Semantically similar? Yes. But the comparison is fragile.
+
+Cam's feedback nailed it: semantic similarity ≠ conceptual alignment.
+
+### v2 Solution: Compare Value Profiles
+
+Instead of matching belief text, compare derived values:
+
+```
+User A's Value Profile:
+  Achievement: 0.7
+  Self-Direction: 0.8
+  Benevolence: 0.4
+  Security: 0.2
+  ...
+
+User B's Value Profile:
+  Achievement: 0.6
+  Self-Direction: 0.7
+  Benevolence: 0.5
+  Security: 0.3
+  ...
+
+Similarity: High (both prioritize Achievement + Self-Direction)
+```
+
+### File-Based Comparison (Local-First)
+
+Since users run their own instances, comparison works via file export:
+
+```
+1. User A: /share-values
+   → Selects which values/beliefs to include (privacy control)
+   → Downloads JSON file
+
+2. User A sends file to User B
+   (Discord DM, email, whatever — outside the bot)
+
+3. User B: /compare-file [attaches file]
+   → Sees comparison of their values vs User A's shared values
+```
+
+**No @user mentions, no request flows, no server coordination.** Simple and privacy-preserving.
+
+### What Comparison Shows
+
+1. **Overall value alignment** — How similar are your value profiles?
+2. **Shared priorities** — Which values you both emphasize
+3. **Interesting differences** — Where you diverge (potential for learning)
+4. **Complementary gaps** — Values one has that the other doesn't emphasize
+
+### Intended Use Cases
+
+- **Understanding a friend better** — "I didn't realize we both value self-direction so much"
+- **Couples/partners** — See where you align and where you might clash
+- **Curiosity** — "How similar am I to this person I admire?"
+
+This is NOT a matching/dating feature. It's a reflection tool for existing relationships.
+
+### Privacy for Comparison
+
+- User explicitly chooses what to export (opt-in per value, per belief)
+- Export UI makes it easy to exclude sensitive values/beliefs
+- Only exported data is shared — raw journal entries never leave the device
+- Recipient only sees what was shared, displayed alongside their own profile
+
+---
+
+## Scheduling System
+
+### User Experience
+
+1. During onboarding, user picks a time: "When should I check in? (e.g., 8pm)"
+2. Bot sends a prompt at that time daily
+3. User can change time anytime with `/schedule`
+4. User can skip days or pause entirely
+
+### Technical Implementation (Local-First)
+
+```python
+# Background task runs while bot is active
+async def scheduler_loop():
+    while True:
+        await asyncio.sleep(60)  # Check every minute
+
+        current_time = get_local_time()
+        users_due = get_users_due_for_prompt(current_time)
+
+        for user in users_due:
+            await send_journal_prompt(user)
+            mark_prompt_sent(user)
+```
+
+### Local Running: Friction & Mitigations
+
+**The reality:** Local-first means the bot must be running to send prompts. This creates friction.
+
+| Scenario | Problem | Mitigation |
+|----------|---------|------------|
+| User restarts computer | Bot stops, misses prompts | Document auto-start setup |
+| User closes terminal | Bot stops | Run as background service |
+| User forgets to start | No prompt that day | Catch-up prompt on next start |
+| User travels (timezone) | Wrong prompt time | `/timezone` command |
+
+**Auto-start setup (document for users):**
+- **macOS:** launchd plist file
+- **Linux:** systemd service unit
+- **Windows:** Task Scheduler entry
+
+**Catch-up logic on startup:**
+```python
+async def check_missed_prompts():
+    for user in get_all_users_with_scheduling():
+        if missed_todays_prompt(user):
+            hours_since = hours_since_scheduled_time(user)
+            if hours_since < 4:
+                await send_catch_up_prompt(user)
+            elif hours_since < 12 and not too_late_at_night():
+                await send_gentle_catch_up(user)
+            # else: skip, wait for tomorrow
+```
+
+**For Railway/cloud users:** No friction — always running.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Bot wasn't running at scheduled time | On startup, check for missed prompts. If within 4 hours, send catch-up. If within 12 hours and not too late, gentle catch-up. Otherwise skip to tomorrow. |
+| User doesn't respond | Don't nag. After 3 ignored prompts, ask once: "Should I check in less often?" Then adapt based on response. |
+| User wants to journal off-schedule | Always welcome. Just DM the bot anytime. |
+| Timezone handling | Store user's preferred time + timezone. `/timezone` command to update. For local hosting, default to system timezone. |
+| User changes schedule mid-day to past time | Wait until tomorrow. Don't trigger immediately (confusing). |
+| User returns after long absence (2+ weeks) | Warm re-engagement: "Hey, it's been a while. No pressure — want to catch up, or just pick up fresh?" Don't guilt-trip about missed sessions. |
+
+---
+
+## Data Model
+
+### New Tables
+
+```sql
+-- User scheduling preferences (extends users table)
+ALTER TABLE users ADD COLUMN prompt_time TEXT;           -- "20:00"
+ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'local';
+ALTER TABLE users ADD COLUMN prompt_depth TEXT DEFAULT 'standard';  -- quick/standard/deep
+ALTER TABLE users ADD COLUMN last_prompt_sent TEXT;
+ALTER TABLE users ADD COLUMN prompts_ignored INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN prompt_frequency TEXT DEFAULT 'daily';  -- daily/every_other/weekly
+
+-- Journal sessions
+CREATE TABLE journal_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    prompt_type TEXT,          -- 'scheduled', 'user_initiated', 'catch_up'
+    message_count INTEGER DEFAULT 0,
+    beliefs_extracted INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Value scores (derived from beliefs)
+CREATE TABLE user_values (
+    user_id TEXT NOT NULL,
+    value_name TEXT NOT NULL,  -- 'achievement', 'benevolence', etc.
+    score REAL DEFAULT 0.0,    -- 0.0 to 1.0
+    belief_count INTEGER DEFAULT 0,
+    last_updated TEXT,
+    PRIMARY KEY (user_id, value_name),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Belief-to-value mapping
+CREATE TABLE belief_values (
+    belief_id TEXT NOT NULL,
+    value_name TEXT NOT NULL,
+    weight REAL DEFAULT 1.0,           -- primary=1.0, secondary=0.5
+    mapping_confidence REAL DEFAULT 1.0, -- how clearly this belief maps to this value
+    PRIMARY KEY (belief_id, value_name),
+    FOREIGN KEY (belief_id) REFERENCES beliefs(id)
+);
+
+-- Value profile snapshots (for tracking change over time)
+CREATE TABLE value_snapshots (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    snapshot_date TEXT NOT NULL,       -- date of snapshot
+    values_json TEXT NOT NULL,         -- JSON of {value_name: score}
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+-- Create weekly snapshots to track value evolution
+-- Future consideration: retention policy (keep weekly for 3 months,
+-- then monthly, then quarterly) to prevent unbounded growth
+```
+
+### Existing Tables (Retained)
+
+- `users` — extended with scheduling fields
+- `beliefs` — unchanged
+- `belief_topics` — unchanged
+- `belief_relations` — unchanged
+- `belief_evolution` — unchanged
+- `conversations` — unchanged
+
+### Removed/Deferred
+
+- `comparison_requests` — rethink for value-based comparison
+- `comparison_results` — rethink for value-based comparison
+- `bridging_beliefs` — defer until v2.1
+
+---
+
+## Commands
+
+### Retained (as-is or minor tweaks)
+
+| Command | Notes |
+|---------|-------|
+| `/help` | Update for v2 commands |
+| `/map` | Shows beliefs grouped by topic |
+| `/explore [topic]` | Dive into beliefs about a topic |
+| `/beliefs` | Raw list with confidence/importance |
+| `/belief [id]` | View single belief with connections |
+| `/history [id]` | Belief evolution over time |
+| `/forget [id]` | Delete a belief |
+| `/undo` | Restore last forgotten |
+| `/pause` / `/resume` | Pause/resume extraction |
+| `/export` | Download all data |
+| `/clear` | Delete everything |
+| `/setup` | Personality selection |
+| `/style` | Fine-tune dimensions |
+
+### New Commands
+
+| Command | Description |
+|---------|-------------|
+| `/schedule [time]` | Set your daily prompt time (e.g., `/schedule 8pm`) |
+| `/timezone [tz]` | Set your timezone (for travelers or misconfigured systems) |
+| `/depth [level]` | Set max prompt depth: quick, standard, deep |
+| `/values` | See your derived value profile (narrative display) |
+| `/values-history` | See how your values have shifted over time |
+| `/share-values` | Export value profile as shareable JSON (with privacy selection) |
+| `/compare-file` | Compare your values with someone's exported file |
+| `/journal` | Start an off-schedule journal session |
+| `/skip` | Skip today's prompt |
+
+### Removed/Deferred
+
+| Command | Reason |
+|---------|--------|
+| `/compare @user` | Removed — use file-based comparison instead (local-first) |
+| `/bridging` | Defer — rethink for values in future version |
+| `/share` | Replaced by `/share-values` |
+| `/share-export` | Replaced by `/share-values` |
+| `/requests` | Removed — no request flow needed for file-based comparison |
+| `/core` | Keep — still useful for viewing important beliefs |
+| `/tensions` | Keep — still useful |
+| `/changes` | Keep — still useful |
+| `/mark` | Keep — importance still matters |
+| `/confidence` | Keep — confidence still matters |
+| `/backup` | Keep — still useful |
+| `/privacy` | Keep simplified — per-belief toggle for "include in value profile" |
+
+---
+
+## Onboarding Flow
+
+Simplified for v2:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  Hey! I'm Kodak.                                          │
+│                                                            │
+│  I'm a journaling companion. Each day at a time you       │
+│  choose, I'll check in and help you reflect.              │
+│                                                            │
+│  Over time, I'll help you see patterns in what you        │
+│  believe and value.                                        │
+│                                                            │
+│  Everything stays private on your device.                  │
+│                                                            │
+│  First — how would you like me to show up?                │
+│                                                            │
+│  [The Philosopher] [The Best Friend] [The Therapist]      │
+│  [The Scientist] [The Trickster]                          │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  [Shows personality preview with example exchange]         │
+│                                                            │
+│  [Choose this one] [See another]                          │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  When should I check in?                                   │
+│                                                            │
+│  Most people like evening — time to reflect on the day.   │
+│                                                            │
+│  [7pm] [8pm] [9pm] [10pm] [Other time...]                 │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  You're all set!                                          │
+│                                                            │
+│  I'll message you at [time] each day.                     │
+│                                                            │
+│  Or just message me anytime you want to reflect.          │
+│                                                            │
+│  Ready for your first session?                            │
+│                                                            │
+│  [Let's go] [I'll wait for the first prompt]              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Decisions Made
+## Prompt Design Guidelines
 
-### Interaction Mode: Both Channel + DM
-- **DMs**: Deep 1:1 belief mapping conversations
-- **Channels**: Casual extraction from group chat, lighter touch
-- Different behaviors for each context (DMs more probing, channels more observational)
+### System Prompt Structure
 
-### Extraction Approach: Active/Hybrid (User-Configurable)
-- Default: Bot is **engaging and proactive**—asks follow-up questions, digs for assumptions
-- User can dial this down if they prefer passive observation
-- Key principle: The bot should ask the *right* questions to extract what's relevant
+Keep it tight. Under 300 words total.
 
-### Commands (Implemented)
-- `/help` — full command reference
-- `/setup` — interactive personality selection with previews
-- `/style` — fine-tune personality dimensions (1-5 scales)
-- `/map` — see belief map with ASCII visualization
-- `/explore [topic]` — dive into beliefs about a topic
-- `/beliefs` — raw list with IDs, confidence, and importance
-- `/belief [id]` — view single belief with connections
-- `/core` — show only important beliefs (★★★★+)
-- `/tensions` — show beliefs that contradict each other
-- `/history [id]` — see how a belief has evolved over time
-- `/changes [days]` — see beliefs that changed recently
-- `/mark [id] [1-5]` — set belief importance level
-- `/confidence [id] [1-5]` — update confidence and record evolution
-- `/share [topic] [core_only]` — create shareable belief snapshot
-- `/compare @user` — request belief comparison with another user
-- `/requests` — see pending comparison requests
-- `/bridging` — see bridging score and bridging beliefs
-- `/privacy` — view/change belief visibility settings
-- `/share-export` — export shareable beliefs as JSON file
-- `/compare-file` — compare with someone's exported file
-- `/forget [id]` — delete a belief (supports "last")
-- `/undo` — restore the last forgotten belief
-- `/pause` / `/resume` — toggle belief tracking
-- `/export` — download all data as JSON
-- `/backup` — download database backup file
-- `/clear` — delete everything (with confirmation)
-
----
-
-## Roadmap
-
-### Vision: Where This Could Go
-
-Kodak started as a simple idea: what if you could see a map of everything you believe?
-
-But the real potential is bigger:
-
-**For individuals:**
-- A mirror for your mind that reveals patterns you can't see yourself
-- Track how your thinking evolves over years, not just moments
-- Export your belief network to your notes app and build on it
-- Get better at noticing your own contradictions and blind spots
-
-**For relationships:**
-- Actually understand where you and your partner/friend/colleague align and differ
-- Find the 3 beliefs causing 90% of your conflicts
-- Discover unexpected common ground with people you thought you disagreed with
-
-**For communities:**
-- See what a group actually believes (not just who's loudest)
-- Find bridging beliefs that unite people across divides
-- Identify productive disagreements worth exploring vs. dead-end culture wars
-- Build genuine understanding instead of filter bubbles
-
-**For society:**
-- What if we could map belief networks at scale?
-- What if we could identify bridge-builders and amplify them?
-- What if technology helped us understand each other instead of polarize?
-
-This is a long-term vision. Right now, Kodak is a Discord bot for personal reflection. But the foundation—belief extraction, relationship mapping, evolution tracking—could grow into something much more.
-
----
-
-### Completed (v0.1 - Friends Launch)
-- [x] Core bot functionality
-- [x] Onboarding flow
-- [x] Belief extraction
-- [x] Privacy controls (pause, export, clear)
-- [x] README and SETUP documentation
-- [x] Personality system with anti-sycophancy design
-- [x] Rate limiting (configurable)
-- [x] Self-hosting guide
-
-### Now (v0.2 - Belief Understanding) ✅ COMPLETE
-- [x] **Belief importance marking** — `/mark [id] [1-5]` and `/core` commands
-- [x] **Belief evolution tracking** — `/history [id]` and `/changes` commands
-- [x] **Better relation display** — Enhanced `/belief [id]` with grouped relations, `/tensions` command
-- [x] **Shareable export format** — `/share` with topic and core_only options
-
-### Now (v0.3 - Comparison & Community) ✅ COMPLETE
-- [x] **1:1 Belief comparison** — `/compare @user` with request/accept flow
-- [x] **Similarity score** — Overall and core similarity percentages
-- [x] **Bridging score** — `/bridging` command shows cross-divide agreement
-- [x] **Tiered privacy** — `/privacy` command, visibility levels on beliefs
-- [x] **File-based comparison** — `/share-export` + `/compare-file` for self-hosters
-
-### Deferred
-- [ ] **Consensus finder** — Surface beliefs that bridge different clusters (needs active community)
-
-### Later (v0.4 - Compatibility & Matching)
-
-The comparison features in v0.3 show similarity scores, but they're basic. v0.4 makes matching actually useful:
-
-- [ ] **Compatibility algorithm** — Multi-factor matching that considers:
-  - Semantic similarity (do beliefs mean the same thing?)
-  - Structural similarity (are they connected the same way?)
-  - Importance weighting (agreement on core beliefs matters more)
-  - Source type alignment (do you both reason from experience vs. authority?)
-
-- [ ] **"Interesting differences" matching** — Sometimes you don't want someone who agrees with you. You want someone who disagrees in a productive way. This finds people where:
-  - You share enough common ground to communicate
-  - You differ on something substantive and interesting
-  - Neither person holds the belief as core identity (so it's discussable)
-
-- [ ] **Bridge Builder identification** — Some people naturally find common ground across divides. Track and surface:
-  - Who has high bridging scores
-  - Which beliefs tend to bridge different clusters
-  - Reward cross-divide engagement, not just echo-chamber agreement
-
-### Later (v0.5 - Visualization & Export)
-
-Text lists only go so far. Beliefs are a network—they should look like one:
-
-- [ ] **Web-based visualization** — Interactive graph where you can:
-  - See clusters of related beliefs
-  - Zoom into topics
-  - Watch evolution over time (animated)
-  - Compare two people's graphs side-by-side
-
-- [ ] **Export to Obsidian/Roam** — Your beliefs as markdown with `[[wiki-links]]`:
-  - Each belief becomes a note
-  - Relations become links
-  - Topics become tags
-  - Take your belief network into your second brain
-
-### Later (v0.6 - Community Intelligence)
-
-With enough users, aggregate patterns emerge:
-
-- [ ] **Community aggregates** — "X% of this server believes Y" (anonymized, opt-in)
-- [ ] **Consensus finder** — Surface beliefs that bridge different clusters
-- [ ] **Pol.is-style clustering** — Visual map of where the community stands
-- [ ] **Deliberation support** — Help groups find productive disagreements to discuss
-
-### Backlog / Ideas
-
-Interesting possibilities, not yet prioritized:
-
-- [ ] **Scheduled check-ins** — "Six months ago you said X. Still feel that way?"
-- [ ] **Steelmanned opposing views** — "Here's the best case for the other side of your belief"
-- [ ] **Belief predictions** — "Based on your other beliefs, you might also think..."
-- [ ] **Voice channel support** — Extract beliefs from voice conversations
-- [ ] **Multi-platform** — Telegram, Slack, web interface
-- [ ] **API for developers** — Let others build on belief extraction
-
-### Polish & UX Improvements
-
-Small things that make the experience better:
-
-- [ ] **Better `/map` visualization** — The ASCII art could be more beautiful/readable
-- [ ] **Smoother onboarding** — Fewer steps, less friction
-- [x] **`/undo` command** — Restore the last forgotten belief (regret happens)
-- [x] **Topic suggestions** — When `/explore` finds nothing, suggest similar topics
-- [ ] **Richer error messages** — More personality, more helpful
-- [ ] **Conversation memory** — Reference earlier parts of the conversation naturally
-- [ ] **Belief merging** — Combine two beliefs that turned out to be the same
-
-### Developer Experience
-
-For maintainability and contribution:
-
-- [ ] **Test suite** — Unit tests for extraction, database, commands
-- [x] **Logging** — See what's happening in production (Railway)
-- [ ] **CI/CD pipeline** — Auto-run tests on PR
-- [ ] **Contributing guide** — How to add features, code style, etc.
-- [ ] **API documentation** — For the database and extraction functions
-
-### Technical Debt (from v0.3 audit)
-
-Known issues to fix:
-
-- [ ] **Belief deduplication** — Currently only checks last 30 beliefs; users with 100+ may get duplicates
-- [ ] **Auto-detect contradictions** — Trigger belief evolution when new statement contradicts existing belief
-- [ ] **In-place belief editing** — Allow updating a belief statement without delete/re-add
-- [ ] **Chunked summarization** — Handle users with 200+ beliefs without exceeding context limits
-- [ ] **Comparison race condition** — Prevent double-execution if two users accept simultaneously
-- [x] **Richer comparison request DMs** — Explain what Kodak is to recipients who may not know the bot
-
----
-
-## Expert Research: Belief Comparison & Compatibility
-
-### Sources Consulted
-
-**Compatibility Algorithms**
-- Helen Fisher's Fisher Temperament Inventory (Match.com) — personality types based on neurochemistry
-- OkCupid's weighted question system — importance weighting (Irrelevant=0 to Mandatory=250x)
-
-**Network Comparison**
-- Graph similarity methods: feature-based, spectral, graph edit distance
-- SimGNN neural network approach for scalable comparison
-- Sentence embeddings for semantic similarity of belief statements
-
-**Collective Intelligence**
-- [Pol.is](https://compdemocracy.org/polis/) — computational democracy, finds bridging consensus
-- [Deliberative Polling](https://deliberation.stanford.edu/) — James Fishkin's structured deliberation
-- [Twitter Community Notes](https://arxiv.org/abs/2210.15723) — bridging-based ranking algorithm
-
-**Filter Bubbles & Bridging**
-- Eli Pariser's filter bubble research
-- Key finding: Simply exposing opposing views can increase polarization (backfire effect)
-- Better approach: Find bridging beliefs valued across divides
-
-**Privacy**
-- Differential privacy for aggregate statistics
-- Tiered disclosure models for belief sharing
-
-### Key Design Principles
-
-1. **Bridging > Exposure**: Don't just show opposing views; help users find common ground first
-
-2. **Importance weighting matters**: Core beliefs should count more than peripheral ones (OkCupid's 250x weight for "mandatory")
-
-3. **Diversity of appreciation = quality**: Content/beliefs are valuable when appreciated across divides (Community Notes insight)
-
-4. **Privacy enables honesty**: Tiered disclosure lets users share authentically without fear
-
-5. **Bounded confidence is real**: People only engage within their comfort zone — design for gradual bridging, not shock exposure
-
-6. **Epistemic humility markers**: Track and reward openness to revision, not just belief consistency
-
-### Proposed Algorithms
-
-**Similarity Score**
 ```
-Overall_Similarity =
-    w1 * Semantic_Similarity +      // Do beliefs mean similar things?
-    w2 * Structural_Similarity +    // Are they connected similarly?
-    w3 * Importance_Weighted_Match  // Do you agree on what matters?
+[Base instructions — ~150 words]
+- You are Kodak, a reflective journaling companion
+- Your role is to help the user reflect on their day
+- Session flow: opener → anchor → probe → connect → close
+- Adapt to response depth (short = fewer probes)
+- Never validate just to be nice
+- Surface patterns as curiosities, not judgments
+
+[Personality flavor — ~50 words]
+- [Personality-specific instructions based on preset]
+
+[Session state — ~20 words]
+- Current stage: [opener/anchor/probe/connect/close]
+- Response depth setting: [quick/standard/deep]
+
+[Recent context — last 2-3 exchanges only]
 ```
 
-**Bridging Score**
-- Track when users agree with beliefs typically held by opposing clusters
-- Higher bridging score = more valuable for community discussions
-- Reward engagement across divides, not just within echo chambers
+### Opener Pools by Personality
 
-**Tiered Privacy Model**
-| Level | Visibility |
-|-------|------------|
-| Public | All server members |
-| Connections | Mutual follows only |
-| Consent | Both parties opt-in |
-| Hidden | Factors into similarity but never shown |
+Each personality has a pool of 7-10 openers. Rotate randomly — don't repeat consecutively.
+
+**The Philosopher:**
+- "What occupied your mind today?"
+- "What's something from today that deserves more thought?"
+- "Any moments today that made you pause?"
+- "What assumptions did today challenge?"
+- "What's sitting with you from today?"
+- "Anything today that surprised you about yourself?"
+- "What would you want to remember from today?"
+
+**The Best Friend:**
+- "Hey! How was today?"
+- "What's the vibe tonight?"
+- "Anything good happen today?"
+- "How you doing?"
+- "What's on your mind?"
+- "Tell me about your day."
+- "Any highlights? Or lowlights?"
+- "What's the headline from today?"
+
+**The Scientist:**
+- "What happened today that's worth examining?"
+- "What data did today generate?"
+- "Any observations from today?"
+- "What would you want to document from today?"
+- "What patterns did you notice today?"
+- "Anything today that warrants analysis?"
+- "What's the most notable event from today?"
+
+**The Trickster:**
+- "Survive another day in the simulation?"
+- "What chaos did today bring?"
+- "Any good stories from today?"
+- "What's the most absurd thing that happened today?"
+- "Did the universe mess with you today?"
+- "Any plot twists today?"
+- "What would today's episode be titled?"
+- "How'd the NPCs treat you today?"
+
+**The Therapist:**
+- "How are you feeling this evening?"
+- "How was today for you?"
+- "What's present for you right now?"
+- "How are you arriving tonight?"
+- "What are you carrying from today?"
+- "How's your heart tonight?"
+- "What does today feel like?"
+
+### Probe Examples by Personality
+
+Probes are more contextual than openers — these are templates/styles, not a rotation pool.
+
+**The Philosopher:**
+- "What does that reveal about what matters to you?"
+- "What's the assumption underneath that?"
+- "Why do you think that bothered you?"
+- "What would it mean if the opposite were true?"
+- "What's the deeper question here?"
+
+**The Best Friend:**
+- "Ugh, that sounds frustrating. What was the worst part?"
+- "Wait, tell me more about that."
+- "How'd that make you feel?"
+- "That's a lot. What's the piece that sticks with you most?"
+- "What did you want to happen instead?"
+
+**The Scientist:**
+- "What specifically triggered that reaction?"
+- "What happened right before that?"
+- "Can you walk me through the sequence?"
+- "What evidence led you to that conclusion?"
+- "What's the specific thing that's bothering you?"
+
+**The Trickster:**
+- "Classic. What's the pettiest thought you had about it?"
+- "On a scale from 'mildly annoyed' to 'plotting revenge,' where are we?"
+- "What would chaos goblin you do about this?"
+- "What's the version of this story you'd tell at a bar?"
+- "Is this a 'vent and forget' or a 'this actually matters' situation?"
+
+**The Therapist:**
+- "It sounds like that really landed. How are you sitting with it?"
+- "What's that bringing up for you?"
+- "Where do you feel that in your body?"
+- "What would you want someone to understand about this?"
+- "What do you need right now?"
+
+---
+
+## What Survives from v1
+
+| Component | Status |
+|-----------|--------|
+| Name "Kodak" | ✅ Kept |
+| Foundational insights | ✅ Kept (more relevant now) |
+| Design principles (most) | ✅ Kept, some adapted |
+| Anti-sycophancy stance | ✅ Kept (critical) |
+| Personality dimensions | ✅ Kept, behaviors adapted |
+| Personality presets | ✅ Kept, behaviors adapted |
+| Belief extraction | ✅ Kept |
+| Belief storage model | ✅ Kept |
+| Topics and relations | ✅ Kept |
+| Evolution tracking | ✅ Kept |
+| Privacy controls | ✅ Kept |
+| Export functionality | ✅ Kept |
+| Most commands | ✅ Kept |
+
+## What Changes
+
+| Component | Change |
+|-----------|--------|
+| Core loop | Reactive → Scheduled prompts |
+| Primary framing | "Belief mapping" → "Reflective journaling" |
+| Onboarding | Personality+mode → Personality+schedule |
+| Comparison | Raw beliefs → Value profiles |
+| Extraction | Beliefs only → Beliefs + derived values |
+| Channel mode | Removed (DM-only) |
+| Comparison flows | Simplified (no request/accept) |
+
+## What's New
+
+| Component | Description |
+|-----------|-------------|
+| Scheduling system | Daily prompts at user-chosen time |
+| Session model | Structured journal sessions |
+| Values framework | Schwartz's 10 Basic Human Values |
+| Value derivation | Beliefs → tagged values → profile |
+| Value comparison | Compare profiles, not raw text |
+| Prompt depth setting | Quick / Standard / Deep |
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Core Rewrite
+- [ ] New onboarding flow (personality → schedule time)
+- [ ] Scheduling system (background task + catch-up logic)
+- [ ] Session model (start/end/track)
+- [ ] Adapted prompt design (personality-specific journaling openers + probes)
+- [ ] Opener pools (7-10 per personality, with rotation)
+- [ ] Probe templates by personality
+- [ ] Clear session closure behavior (with extraction visibility)
+- [ ] First session special handling (lighter, reassuring)
+- [ ] Re-engagement flow for returning users (2+ weeks absent)
+- [ ] Adaptive depth inference from response length
+- [ ] Remove channel mode (DM-only)
+- [ ] Document auto-start setup for local users
+
+### Phase 2: Values
+- [ ] Add Schwartz value constants (10 values + higher-order dimensions)
+- [ ] Extend extraction to tag beliefs with values + mapping confidence
+- [ ] Temporal decay weighting (3-month half-life)
+- [ ] Value normalization (relative to user's own max)
+- [ ] Build value profile aggregation
+- [ ] Weekly value snapshots for change tracking
+- [ ] `/values` command with narrative display
+- [ ] `/values-history` command showing change over time
+
+### Phase 3: Comparison (File-Based)
+- [ ] `/share-values` with privacy selection UI
+- [ ] Export format (JSON with selected values/beliefs)
+- [ ] `/compare-file` to load and compare
+- [ ] Comparison display (shared values, differences, narrative)
+
+### Phase 4: Polish
+- [ ] Adaptive prompting (ask about frequency after ignored prompts)
+- [ ] Pattern surfacing (max once per week)
+- [ ] Weekly reflection summaries (optional)
+- [ ] `/timezone` command
+- [ ] Per-belief "exclude from values" toggle
 
 ---
 
 ## Open Questions
 
-- How does the bot decide something is a "belief" vs just a statement?
-- How granular? "I like coffee" vs "Small pleasures matter" vs "Hedonism is valid"
-- What visualization approach for the belief map?
-- How to handle backfire effect when showing belief differences?
-- What's the right balance of similarity vs "interesting differences" in matching?
+1. **How many values per belief?** Start with 1-3, see if that's too noisy.
+
+2. **How to handle value conflicts?** Same person can value both Security and Stimulation in different contexts. Consider domain-tagging beliefs (work vs. relationships vs. personal)?
+
+3. **Mapping confidence threshold?** Should we skip tagging beliefs that don't clearly map to values (confidence < 0.5)? Or tag everything but weight low-confidence mappings less? *Leaning toward: tag everything, weight by confidence.*
+
+4. **Weekly summaries?** "Here's what I noticed this week" — test with users. Make it optional/skippable if annoying.
+
+5. **Opener fatigue?** With 7-10 openers per personality, how long before they feel repetitive? May need to expand pools over time or add seasonal/contextual variation.
+
+## Resolved Questions
+
+- **Extraction visibility:** Show at session close, not during. ✅
+- **What if someone only wants journaling?** Extraction always on, values only surface if asked. ✅
+- **Auto-start priority:** Document it but accept local users need some setup. ✅
+- **First session handling:** Lighter, with explicit reassurance. ✅
+- **Re-engagement after absence:** Warm, no guilt-trip. ✅
 
 ---
 
-## Expert UX Audit (Pre-Build Review)
-
-### Sources Consulted
-
-**Conversational Design**
-- [Erika Hall - Conversational Design](https://abookapart.com/products/conversational-design) — "First, imagine the conversation. Then use it to guide the design."
-- [Conversation Design Institute](https://www.conversationdesigninstitute.com/topics/conversation-design) — Combining UX, psychology, and linguistics
-- [Mind the Product - AI Chatbot UX](https://www.mindtheproduct.com/deep-dive-ux-best-practices-for-ai-chatbots/) — Nine best practices
-
-**Tools for Thought**
-- [Maggie Appleton - Squish Meets Structure](https://maggieappleton.com/squish-structure) — The chatbot interface is "far too open-ended"
-- [Maggie Appleton - Tools for Thought](https://maggieappleton.com/tools-for-thought) — Cultural practices, not just computational objects
-
-**Privacy & Trust**
-- [Smashing Magazine - Privacy UX Framework](https://www.smashingmagazine.com/2019/04/privacy-ux-aware-design-framework/)
-- [Privacy-First UX & Design Systems](https://medium.com/@harsh.mudgal_27075/privacy-first-ux-design-systems-for-trust-9f727f69a050)
-
-**Onboarding**
-- [NN/g - New AI Users Need Support](https://www.nngroup.com/articles/new-AI-users-onboarding/)
-- [Stream - Chat UX Best Practices](https://getstream.io/blog/chat-ux/)
-
-**Discord-Specific**
-- [Netguru - Chatbot UX Tips](https://www.netguru.com/blog/chatbot-ux-tips)
-- [Dive Club - The Discord Bot Era](https://www.dive.club/ideas/the-discord-bot-era-of-design)
-
----
-
-### Issue #1: No Onboarding Experience
-
-**The Problem (Erika Hall, NN/g)**
-
-Currently, new users get no introduction. They either figure it out or bounce. Hall's principle: "The ideal interface is one that's not noticeable at all." But that requires the user to understand what's happening.
-
-NN/g research: "New users need support with generative AI tools... onboarding tutorials should be brief yet informative, addressing users' key questions and stating the tool's purpose."
-
-**Current State**
-- User DMs bot → bot just... responds
-- No explanation of what Kodak does
-- No consent for belief tracking
-- No personality selection prompt
-
-**Recommendation**
-
-Add first-message onboarding flow:
-
-```
-👋 Hey! I'm Kodak.
-
-I'm here to have great conversations with you—and along the way,
-I'll help you build a map of what you believe and why.
-
-Think of it like a mirror for your mind. Everything stays private
-to you, and you can delete anything anytime.
-
-Before we start, how would you like me to show up?
-
-[The Philosopher] [The Best Friend] [The Trickster] [Skip for now]
-```
-
-Use Discord buttons for selection. Then:
-
-```
-Great choice. One more thing—how active should I be?
-
-• Active: I'll ask follow-up questions to understand you better
-• Chill: I'll mostly listen and let things emerge naturally
-
-[Active] [Chill]
-```
-
----
-
-### Issue #2: Belief Extraction Feels Invisible (Potentially Creepy)
-
-**The Problem (Privacy UX Research)**
-
-80% of users are more willing to share data when they understand how it benefits them. Currently, beliefs are extracted silently—users have no idea it's happening.
-
-Maggie Appleton on Elicit: "There are many fascinating challenges around trust, reliability, truthfulness, and transparency."
-
-**Current State**
-- Beliefs extracted in background
-- User never sees what was captured
-- No opt-in, no visibility, no control in the moment
-
-**Recommendation**
-
-Option A: **Visible extraction with confirmation**
-After certain messages, bot could say:
-```
-(I noticed something that might be a core belief: "Hard work is the
-main driver of success." Want me to add that to your map? 👍/👎)
-```
-
-Option B: **Periodic summary**
-Every N messages or at session end:
-```
-Quick recap—I picked up a few things from our chat:
-• You value authenticity over politeness
-• You're skeptical of institutions but trust individuals
-• Childhood experiences shaped your view on [X]
-
-Anything I got wrong? Just say "forget [number]" to remove.
-```
-
-Option C: **On-demand only (passive mode)**
-Only extract when user explicitly asks: "What did you learn about me?"
-
-**For MVP**: Start with Option B (periodic summary). Less intrusive, builds trust, gives user agency.
-
----
-
-### Issue #3: The "Open-Ended Chatbox" Problem
-
-**The Problem (Maggie Appleton)**
-
-"The chatbot as an interface is far too open-ended and gives too much onus to the user to figure out what they should be doing."
-
-User opens DM, sees empty chat. Now what? The lack of structure creates anxiety.
-
-**Current State**
-- No conversation starters
-- No prompts or suggestions
-- User must initiate everything
-
-**Recommendation**
-
-Add **conversation starters** that appear for new/returning users:
-
-```
-What's on your mind today?
-
-Or try one of these:
-💭 "Something I've been thinking about lately..."
-🔥 "An opinion I hold that might be controversial..."
-❓ "A question I've never been able to answer..."
-🔄 "Something I used to believe but changed my mind on..."
-```
-
-These double as belief extraction hooks—they naturally surface beliefs.
-
-For returning users:
-```
-Welcome back! Last time we talked about [topic].
-
-Want to continue that, or explore something new?
-```
-
----
-
-### Issue #4: Commands Are Discoverable but Not Inviting
-
-**The Problem (Chatbot UX Best Practices)**
-
-"Using the chatbot shouldn't feel like operating a plane." Slash commands are powerful but feel technical.
-
-**Current State**
-- `/setup`, `/map`, `/explore`, `/beliefs`, `/forget`, `/style`
-- All functional, none delightful
-- No natural language alternatives
-
-**Recommendation**
-
-Support **natural language** for common actions:
-- "Show me my map" → triggers map display
-- "What do I believe about work?" → triggers explore
-- "Forget that last thing" → triggers forget flow
-- "Make yourself more playful" → adjusts personality
-
-Also: Better command descriptions and examples in `/help` (which we don't have yet).
-
-Add `/help` command:
-```
-**Kodak Commands**
-
-🗺️ /map — See your belief map summarized
-🔍 /explore [topic] — Dive into what you believe about something
-📝 /beliefs — Raw list of everything I've captured
-🗑️ /forget [id] — Remove a belief
-🎭 /setup — Choose a personality preset
-🎚️ /style — Fine-tune personality dimensions
-
-Or just talk to me naturally—I'll figure out what you mean.
-```
-
----
-
-### Issue #5: Error Handling & Graceful Failure
-
-**The Problem (Conversation Design Institute)**
-
-"The capacity to fail elegantly and provide routes to repair the conversation is essential."
-
-**Current State**
-- If extraction fails, user never knows
-- If API errors, user gets raw error message
-- No fallback for confused states
-
-**Recommendation**
-
-Handle failures conversationally:
-
-```python
-# Instead of:
-return f"Sorry, I encountered an error: {e}"
-
-# Try:
-return "Hmm, my mind went blank for a second there. Could you say that again?"
-```
-
-For extraction failures—just skip silently (no user-facing impact).
-
-For API rate limits:
-```
-I need a quick breather—lots of good conversations today.
-Try again in a minute?
-```
-
----
-
-### Issue #6: The Map Is Text-Only
-
-**The Problem (Maggie Appleton on Visualization)**
-
-Appleton's work emphasizes visual explanations. A text summary of beliefs is functional but not delightful or explorable.
-
-**Current State**
-- `/map` returns a paragraph summary
-- No visual representation
-- Can't "wander" the map
-
-**Recommendation (Future)**
-
-For MVP: Text is fine. But design for future visualization:
-
-1. **ASCII/Emoji cluster view** (Discord-native):
-```
-Your Belief Landscape
-
-🏛️ WORK & SUCCESS ━━━━━━━━━━━━━━
-   ├─ Hard work drives outcomes
-   ├─ Talent is overrated
-   └─ Burnout is a real risk ⚡ (tension)
-
-❤️ RELATIONSHIPS ━━━━━━━━━━━━━━━
-   ├─ Honesty > politeness
-   └─ Trust is earned slowly
-
-🌍 SOCIETY ━━━━━━━━━━━━━━━━━━━━━
-   ├─ Institutions are failing
-   └─ Individual action matters
-```
-
-2. **Web-based visualization** (future):
-Link out to a web view with interactive graph.
-
-3. **Export to Obsidian/Roam** (future):
-Let users get their belief graph as markdown with `[[links]]`.
-
----
-
-### Issue #7: No "Why" Behind Belief Capture
-
-**The Problem (Tetlock, Galef)**
-
-We track beliefs but not the reasoning chains. "Why do you believe that?" is as important as "what do you believe?"
-
-**Current State**
-- `source_type` captures rough origin (experience, authority, etc.)
-- No actual reasoning captured
-- No "because" connections
-
-**Recommendation**
-
-Enhance extraction to capture reasoning when present:
-
-```
-User: "I think remote work is better because I'm more productive at home
-and I hate commuting."
-
-Extracted:
-- Belief: "Remote work is better than office work"
-- Supporting reasons:
-  - "I'm more productive at home"
-  - "Commuting is unpleasant"
-- Source: experience
-```
-
-This enriches the graph significantly.
-
----
-
-### Issue #8: Privacy Controls Are Minimal
-
-**The Problem (Privacy UX Research)**
-
-"Enable granular privacy controls that allow users to customize data sharing preferences." Users need to feel in control.
-
-**Current State**
-- `/forget` exists but requires knowing IDs
-- No bulk delete
-- No export
-- No pause/resume tracking
-- No "delete everything"
-
-**Recommendation**
-
-Add privacy commands:
-- `/pause` — Stop tracking beliefs (but keep chatting)
-- `/resume` — Resume tracking
-- `/export` — Get all your data as JSON
-- `/clear` — Delete everything (with confirmation)
-- `/forget last` — Forget most recent belief
-- `/forget all [topic]` — Forget everything about a topic
-
-Also: Add privacy note to onboarding:
-```
-🔒 Your beliefs stay private to you. I never share them.
-You can delete anything with /forget, or everything with /clear.
-```
-
----
-
-### Issue #9: Personality System Lacks Demonstration
-
-**The Problem (Chatbot Personality Design)**
-
-"Building a rich and detailed personality makes your chatbot more relatable." But users can't preview personalities before choosing.
-
-**Current State**
-- Presets have one-line descriptions
-- No sample dialogue
-- Can't "try before you buy"
-
-**Recommendation**
-
-Show personality in action during setup:
-
-```
-**The Philosopher** — Thoughtful and probing
-
-Example:
-You: "I think people are basically good"
-Kodak: "That's a hopeful foundation. What experiences have
-shaped that view? And does it hold even for people who've
-done terrible things?"
-
-[Choose this one] [See another]
-```
-
-Or: Let them chat briefly with each personality before committing.
-
----
-
-### Summary: Priority Fixes Before Launch
-
-| Priority | Issue | Fix | Status |
-|----------|-------|-----|--------|
-| 🔴 High | No onboarding | Add first-message welcome flow | ✅ Done |
-| 🔴 High | Invisible extraction | Add periodic "here's what I learned" summaries | ✅ Done |
-| 🟡 Medium | No conversation starters | Add prompt suggestions for new/returning users | ✅ Done |
-| 🟡 Medium | No /help | Add help command | ✅ Done |
-| 🟡 Medium | Poor error messages | Make failures conversational | ✅ Done |
-| 🟢 Lower | Text-only map | Design ASCII cluster view | ✅ Done |
-| 🟢 Lower | Minimal privacy controls | Add /pause, /export, /clear | ✅ Done |
-| 🟢 Lower | No personality preview | Show example dialogues | ✅ Done |
-
----
-
----
-
-## Implementation Status
-
-### Implemented Features
-
-**Onboarding Flow**
-- New users see welcome embed explaining Kodak's purpose
-- Privacy notice in footer ("Your beliefs stay private")
-- Personality selection via dropdown with 5 presets
-- Each preset shows example dialogue before committing
-- Extraction mode selection (Active/Chill buttons)
-- Conversation starters shown after setup completes
-
-**Belief Visibility**
-- Periodic "Quick snapshot" summaries every 8 messages
-- Shows 3 most recent beliefs captured
-- Includes prompt to use `/forget` if anything is wrong
-- Users can also ask "show me my map" naturally
-
-**Commands**
-- `/help` — Full command reference with categories
-- `/map` — ASCII-style visualization by topic with confidence bars
-- `/explore [topic]` — Deep dive with topic suggestions if none found
-- `/beliefs` — Raw list with importance (★) and confidence (●) indicators
-- `/belief [id]` — View single belief with its connections
-- `/core` — Show only important beliefs (★★★★+)
-- `/tensions` — Show beliefs that contradict each other
-- `/history [id]` — See how a belief has evolved over time
-- `/changes [days]` — See beliefs that changed recently
-- `/mark [id] [1-5]` — Set belief importance level
-- `/confidence [id] [1-5]` — Update confidence and record evolution
-- `/share [topic] [core_only]` — Create shareable belief snapshot with embed and copy-paste formats
-- `/compare @user` — Request belief comparison with another user
-- `/requests` — See pending comparison requests
-- `/bridging` — See bridging score and bridging beliefs
-- `/privacy` — View/change belief visibility settings
-- `/share-export` — Export shareable beliefs as JSON file
-- `/compare-file` — Compare with someone's exported file
-- `/forget [id]` — Supports "last" keyword for most recent
-- `/undo` — Restore the last forgotten belief
-- `/setup` — Interactive personality selection with previews
-- `/style` — Visual bar display for current settings
-- `/pause` / `/resume` — Toggle belief tracking
-- `/export` — Download all data as JSON file
-- `/backup` — Download database backup file
-- `/clear` — Delete everything with confirmation modal
-
-**Natural Language Support**
-- "show me my map" / "what do I believe" → map display
-- "pause tracking" / "stop tracking" → pause extraction
-- "resume tracking" / "start tracking" → resume extraction
-
-**Privacy Features**
-- Tracking can be paused while still chatting
-- Full data export (GDPR-style)
-- Complete data deletion with confirmation
-- All slash command responses are ephemeral (private)
-
-**Error Handling**
-- Rate limits: "I need a quick breather..."
-- Connection issues: "I lost my train of thought..."
-- Generic errors: "My mind went blank..."
-
----
-
-### Erika Hall's Conversational Maxims Applied
-
-From *Conversational Design*, the qualities of good conversation:
-
-| Maxim | Current State | Recommendation |
-|-------|--------------|----------------|
-| **Right quantity** | ⚠️ No guidance on message length | Add to prompt: keep responses concise |
-| **Truthful** | ✅ Bot doesn't make false claims | Maintain |
-| **Relevant** | ✅ Stays on topic | Maintain |
-| **Brief & clear** | ⚠️ Summaries can be long | Chunk long outputs |
-| **Orderly** | ✅ Logical flow | Maintain |
-| **Unambiguous** | ⚠️ Commands not always clear | Add natural language fallbacks |
-| **Polite** | ✅ Tone is respectful | Maintain |
-| **Error-tolerant** | ❌ Raw errors shown | Add graceful failure messages |
+## References
+
+### Values Research
+- Schwartz, S.H. (1992). Universals in the content and structure of values
+- Schwartz, S.H. (2012). An Overview of the Schwartz Theory of Basic Values
+- World Values Survey methodology
+
+### Journaling Research
+- Pennebaker, J.W. — Expressive writing and health outcomes
+- Reflection and metacognition literature
+
+### Conversational Design
+- Erika Hall — *Conversational Design*
+- Conversation Design Institute
+
+### From v1 (Still Relevant)
+- Andy Matuschak — Evergreen Notes
+- Michael Nielsen — Augmenting Cognition
+- Julia Galef — Scout Mindset
+- Philip Tetlock — Superforecasting
+- Gordon Brander — Noosphere

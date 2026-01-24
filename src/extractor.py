@@ -1,87 +1,167 @@
-"""Belief extraction using Claude API."""
+"""Belief and value extraction for Kodak v2.
+
+Extends v1 extraction to also tag beliefs with Schwartz values.
+"""
 
 import json
 import logging
 import anthropic
 from typing import Optional
+from dataclasses import dataclass
+
+from values import ALL_VALUES, VALUE_DEFINITIONS
 
 logger = logging.getLogger('kodak')
 
-# Initialize client (will use ANTHROPIC_API_KEY env var)
-client = anthropic.Anthropic()
+# Initialize client lazily
+_client = None
 
-EXTRACTION_PROMPT = """Analyze this message for beliefs, opinions, assumptions, and values expressed by the user.
+
+def get_client():
+    """Lazy-load Anthropic client."""
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic()
+    return _client
+
+
+# ============================================
+# EXTRACTION PROMPT
+# ============================================
+
+EXTRACTION_PROMPT = """Analyze this journal entry for beliefs, opinions, assumptions, and values expressed by the user.
 
 For each belief found, extract:
 1. statement: A clear, concise statement of the belief (reword if needed for clarity)
-2. confidence: How confident they seem (0.0-1.0). Look for hedging language, certainty markers, etc.
+2. confidence: How confident they seem (0.0-1.0). Look for hedging language, certainty markers.
 3. source_type: Where this belief seems to come from:
    - "experience": Personal experience or observation
    - "reasoning": Logical deduction or analysis
-   - "authority": Something they learned from others, experts, books, etc.
-   - "intuition": Gut feeling, just seems true to them
+   - "authority": Something learned from others, experts, books
+   - "intuition": Gut feeling, just seems true
    - "inherited": Cultural, familial, or social default
 4. topics: 1-3 topic tags (lowercase, single words or short phrases)
+5. values: 0-3 Schwartz Basic Human Values this belief reflects, with mapping confidence
+
+The 10 Schwartz values are:
+- universalism: tolerance, social justice, equality, protecting nature
+- benevolence: helpfulness, honesty, loyalty to close others
+- tradition: respect for customs, humility, devotion
+- conformity: obedience, self-discipline, politeness
+- security: safety, stability, social order
+- achievement: success, competence, ambition
+- power: authority, wealth, social recognition
+- self_direction: creativity, freedom, independence
+- stimulation: excitement, novelty, challenge
+- hedonism: pleasure, enjoying life
 
 Guidelines:
-- Only extract genuine beliefs, opinions, values, or assumptions—not factual statements or descriptions
+- Only extract genuine beliefs, opinions, values, or assumptions
 - "I had coffee today" is not a belief. "Coffee is essential for productivity" is.
-- Look for underlying assumptions too. "I need to work harder" might assume "success comes from effort"
-- If someone says "I think X but I'm not sure", that's a belief with low confidence
-- Don't over-extract. Quality over quantity. 0-3 beliefs per message is typical.
-- If there are no beliefs in the message, return an empty array.
+- Look for underlying assumptions. "I need to work harder" assumes "effort leads to success"
+- Keep beliefs ATOMIC (single ideas). Split compound beliefs.
+- Quality over quantity. 0-3 beliefs per message is typical.
+- Not every belief maps to a value. If unclear, use empty values array.
+- mapping_confidence: How clearly this belief indicates the value (0.0-1.0)
+  - 1.0: "I believe in equality for all" clearly maps to universalism
+  - 0.6: "I like exploring new places" moderately suggests stimulation
+  - Don't force low-confidence mappings; better to skip them
 
-IMPORTANT - Keep beliefs ATOMIC (single ideas):
-- BAD: "Deep understanding of both the field and people is necessary for high-leverage work"
-- GOOD: Split into two beliefs:
-  1. "Deep technical knowledge is necessary for high-leverage work"
-  2. "Understanding the people in a field is necessary for high-leverage work"
-- Each belief should express ONE clear idea, not multiple ideas joined together
-- Compound beliefs with "and", "both", "as well as" should usually be split
-
-Return valid JSON only, no other text:
+Return valid JSON only:
 {
   "beliefs": [
     {
       "statement": "string",
       "confidence": 0.0-1.0,
       "source_type": "experience|reasoning|authority|intuition|inherited",
-      "topics": ["topic1", "topic2"]
+      "topics": ["topic1", "topic2"],
+      "values": [
+        {"name": "value_name", "weight": 1.0, "mapping_confidence": 0.8}
+      ]
     }
   ],
-  "reasoning": "Brief explanation of why you extracted these (or why none)"
+  "reasoning": "Brief explanation of extractions"
 }"""
 
 
-async def extract_beliefs(
+# ============================================
+# DATA STRUCTURES
+# ============================================
+
+@dataclass
+class ExtractedValue:
+    """A value tagged to a belief."""
+    name: str
+    weight: float  # 1.0 = primary, 0.5 = secondary
+    mapping_confidence: float
+
+
+@dataclass
+class ExtractedBelief:
+    """A belief extracted from conversation."""
+    statement: str
+    confidence: float
+    source_type: str
+    topics: list[str]
+    values: list[ExtractedValue]
+
+    def to_dict(self) -> dict:
+        return {
+            'statement': self.statement,
+            'confidence': self.confidence,
+            'source_type': self.source_type,
+            'topics': self.topics,
+            'values': [
+                {'name': v.name, 'weight': v.weight, 'mapping_confidence': v.mapping_confidence}
+                for v in self.values
+            ]
+        }
+
+
+@dataclass
+class ExtractionResult:
+    """Result of extraction from a message."""
+    beliefs: list[ExtractedBelief]
+    reasoning: str
+
+    def has_beliefs(self) -> bool:
+        return len(self.beliefs) > 0
+
+
+# ============================================
+# EXTRACTION FUNCTIONS
+# ============================================
+
+async def extract_beliefs_and_values(
     message: str,
     conversation_context: list[dict] = None,
     existing_beliefs: list[dict] = None
-) -> dict:
+) -> ExtractionResult:
     """
-    Extract beliefs from a message.
+    Extract beliefs and their associated values from a message.
 
     Args:
         message: The user's message to analyze
         conversation_context: Recent conversation history for context
-        existing_beliefs: User's existing beliefs to check for updates/contradictions
+        existing_beliefs: User's existing beliefs to avoid duplicates
 
     Returns:
-        Dict with 'beliefs' list and 'reasoning' explanation
+        ExtractionResult with beliefs and reasoning
     """
+    # Build context string
     context_str = ""
     if conversation_context:
-        context_str = "\n\nRecent conversation context:\n"
-        for msg in conversation_context[-10:]:
-            role = "User" if msg["role"] == "user" else "Kodak"
-            context_str += f"{role}: {msg['content']}\n"
+        context_str = "\n\nRecent conversation:\n"
+        for msg in conversation_context[-6:]:
+            role = "User" if msg.get("role") == "user" else "Kodak"
+            context_str += f"{role}: {msg.get('content', '')}\n"
 
+    # Build existing beliefs context
     beliefs_str = ""
     if existing_beliefs:
-        beliefs_str = "\n\nBeliefs already recorded for this user:\n"
-        for b in existing_beliefs[:30]:
-            beliefs_str += f"- {b['statement']}\n"
-        beliefs_str += "\nAvoid re-extracting beliefs that are essentially the same. But do note if a new statement contradicts or updates an existing belief."
+        beliefs_str = "\n\nExisting beliefs (avoid duplicates):\n"
+        for b in existing_beliefs[:20]:
+            beliefs_str += f"- {b.get('statement', '')}\n"
 
     full_prompt = f"""{EXTRACTION_PROMPT}
 {context_str}
@@ -91,16 +171,16 @@ Message to analyze:
 \"\"\"{message}\"\"\""""
 
     try:
+        client = get_client()
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
             messages=[{"role": "user", "content": full_prompt}]
         )
 
-        # Parse the JSON response
         content = response.content[0].text
 
-        # Handle potential markdown code blocks
+        # Handle markdown code blocks
         if content.startswith("```"):
             content = content.split("```")[1]
             if content.startswith("json"):
@@ -108,190 +188,129 @@ Message to analyze:
         content = content.strip()
 
         result = json.loads(content)
-        return result
+        return _parse_extraction_result(result)
 
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse extraction response: {e}")
-        return {"beliefs": [], "reasoning": f"Failed to parse extraction: {e}"}
+        return ExtractionResult(beliefs=[], reasoning=f"Parse error: {e}")
     except anthropic.APIError as e:
         logger.error(f"API error during extraction: {e}")
-        return {"beliefs": [], "reasoning": f"API error: {e}"}
+        return ExtractionResult(beliefs=[], reasoning=f"API error: {e}")
+    except Exception as e:
+        logger.error(f"Extraction error: {e}")
+        return ExtractionResult(beliefs=[], reasoning=f"Error: {e}")
 
 
-async def generate_response(
-    message: str,
-    system_prompt: str,
-    conversation_history: list[dict] = None
-) -> str:
+def _parse_extraction_result(raw: dict) -> ExtractionResult:
+    """Parse raw JSON into structured ExtractionResult."""
+    beliefs = []
+
+    for b in raw.get("beliefs", []):
+        # Parse values
+        values = []
+        for v in b.get("values", []):
+            name = v.get("name", "").lower().replace("-", "_").replace(" ", "_")
+            # Validate it's a real Schwartz value
+            if name in ALL_VALUES:
+                values.append(ExtractedValue(
+                    name=name,
+                    weight=float(v.get("weight", 1.0)),
+                    mapping_confidence=float(v.get("mapping_confidence", 0.5))
+                ))
+
+        # Only include values with reasonable confidence
+        values = [v for v in values if v.mapping_confidence >= 0.4]
+
+        beliefs.append(ExtractedBelief(
+            statement=b.get("statement", ""),
+            confidence=float(b.get("confidence", 0.5)),
+            source_type=b.get("source_type", "experience"),
+            topics=b.get("topics", []),
+            values=values[:3]  # Max 3 values per belief
+        ))
+
+    return ExtractionResult(
+        beliefs=beliefs,
+        reasoning=raw.get("reasoning", "")
+    )
+
+
+# ============================================
+# BATCH EXTRACTION (for session close)
+# ============================================
+
+async def extract_from_session(
+    messages: list[dict],
+    existing_beliefs: list[dict] = None
+) -> ExtractionResult:
     """
-    Generate a conversational response.
+    Extract beliefs from an entire session's messages.
 
-    Args:
-        message: The user's message
-        system_prompt: The full system prompt (including personality)
-        conversation_history: Recent conversation history
-
-    Returns:
-        The assistant's response text
+    This is called at session close to do a final extraction pass.
     """
-    messages = []
+    # Combine user messages for analysis
+    user_messages = [
+        msg.get('content', '')
+        for msg in messages
+        if msg.get('role') == 'user'
+    ]
 
-    if conversation_history:
-        for msg in conversation_history[-20:]:
-            messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
+    if not user_messages:
+        return ExtractionResult(beliefs=[], reasoning="No user messages")
 
-    messages.append({"role": "user", "content": message})
+    combined = "\n\n".join(user_messages)
 
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=messages
-        )
-
-        return response.content[0].text
-
-    except anthropic.RateLimitError:
-        logger.warning("Anthropic rate limit hit")
-        return "Hmm, I need a quick breather—lots of good conversations happening right now. Try again in a moment?"
-
-    except anthropic.APIConnectionError as e:
-        logger.error(f"Anthropic connection error: {e}")
-        return "I seem to have lost my train of thought for a second. Could you try that again?"
-
-    except anthropic.APIError as e:
-        logger.error(f"Anthropic API error: {e}")
-        return "My mind went blank there for a moment. Mind saying that again?"
+    return await extract_beliefs_and_values(
+        message=combined,
+        conversation_context=messages,
+        existing_beliefs=existing_beliefs
+    )
 
 
-async def find_belief_relations(
-    new_belief: dict,
-    existing_beliefs: list[dict]
-) -> list[dict]:
+# ============================================
+# STANDALONE VALUE TAGGING
+# ============================================
+
+async def tag_belief_with_values(
+    belief_statement: str,
+    belief_context: str = None
+) -> list[ExtractedValue]:
     """
-    Find relationships between a new belief and existing beliefs.
+    Tag an existing belief with Schwartz values.
 
-    Returns list of relation dicts with source_id, target_id, relation_type, strength
+    Use this for beliefs extracted without values, or for re-tagging.
     """
-    if not existing_beliefs:
-        return []
+    prompt = f"""Analyze this belief statement and identify which Schwartz Basic Human Values it reflects.
 
-    beliefs_list = "\n".join([
-        f"[{b['id']}] {b['statement']}"
-        for b in existing_beliefs[:30]
-    ])
+The 10 Schwartz values:
+- universalism: tolerance, social justice, equality, protecting nature
+- benevolence: helpfulness, honesty, loyalty to close others
+- tradition: respect for customs, humility, devotion
+- conformity: obedience, self-discipline, politeness
+- security: safety, stability, social order
+- achievement: success, competence, ambition
+- power: authority, wealth, social recognition
+- self_direction: creativity, freedom, independence
+- stimulation: excitement, novelty, challenge
+- hedonism: pleasure, enjoying life
 
-    prompt = f"""Given this new belief:
-"{new_belief['statement']}"
+Belief: "{belief_statement}"
+{f'Context: {belief_context}' if belief_context else ''}
 
-And these existing beliefs:
-{beliefs_list}
+Return 0-3 values this belief most clearly reflects. Only include values where the mapping is reasonably clear.
 
-Identify any meaningful relationships between the new belief and existing ones.
-Relationship types:
-- supports: The new belief provides evidence/support for an existing one
-- contradicts: The new belief is in tension with an existing one
-- assumes: The new belief rests on an existing one as a foundation
-- derives_from: The new belief is a logical consequence of an existing one
-- relates_to: General topical relationship
-
-Return valid JSON only:
+Return JSON only:
 {{
-  "relations": [
-    {{
-      "target_id": "uuid of existing belief",
-      "relation_type": "supports|contradicts|assumes|derives_from|relates_to",
-      "strength": 0.0-1.0,
-      "explanation": "brief explanation"
-    }}
+  "values": [
+    {{"name": "value_name", "weight": 1.0, "mapping_confidence": 0.8}}
   ]
-}}
-
-Only include meaningful, clear relationships. Empty array is fine if none found."""
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        content = response.content[0].text
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        content = content.strip()
-
-        result = json.loads(content)
-        return result.get("relations", [])
-
-    except (json.JSONDecodeError, anthropic.APIError) as e:
-        logger.warning(f"Failed to find belief relations: {e}")
-        return []
-
-
-async def calculate_belief_similarity(beliefs_a: list[dict], beliefs_b: list[dict]) -> dict:
-    """
-    Calculate similarity between two users' belief sets.
-    Uses Claude to find semantic matches and calculate agreement.
-    """
-    if not beliefs_a or not beliefs_b:
-        return {
-            "overall_similarity": 0,
-            "core_similarity": 0,
-            "agreements": [],
-            "differences": [],
-            "unique_a": beliefs_a,
-            "unique_b": beliefs_b
-        }
-
-    # Format beliefs for comparison
-    beliefs_a_text = "\n".join([
-        f"[A{i}] (importance:{b.get('importance', 3)}) {b['statement']}"
-        for i, b in enumerate(beliefs_a[:25])
-    ])
-    beliefs_b_text = "\n".join([
-        f"[B{i}] (importance:{b.get('importance', 3)}) {b['statement']}"
-        for i, b in enumerate(beliefs_b[:25])
-    ])
-
-    prompt = f"""Compare these two sets of beliefs and find:
-1. Agreements (similar or compatible beliefs)
-2. Differences (contradictory or opposing beliefs)
-3. Unique beliefs (held by one person, no match in the other)
-
-USER A's beliefs:
-{beliefs_a_text}
-
-USER B's beliefs:
-{beliefs_b_text}
-
-For each match, consider:
-- Semantic similarity (do they mean the same thing?)
-- Importance weighting (core beliefs matter more)
-
-Return valid JSON only:
-{{
-  "agreements": [
-    {{"a_index": 0, "b_index": 2, "similarity": 0.9, "note": "Both value honesty"}}
-  ],
-  "differences": [
-    {{"a_index": 1, "b_index": 3, "note": "Opposing views on X"}}
-  ],
-  "overall_similarity": 0.0-1.0,
-  "core_similarity": 0.0-1.0,
-  "summary": "One sentence summary of compatibility"
 }}"""
 
     try:
+        client = get_client()
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=1024,
+            max_tokens=256,
             messages=[{"role": "user", "content": prompt}]
         )
 
@@ -304,93 +323,45 @@ Return valid JSON only:
 
         result = json.loads(content)
 
-        # Enrich with actual belief data
-        enriched_agreements = []
-        for ag in result.get("agreements", []):
-            a_idx = ag.get("a_index", 0)
-            b_idx = ag.get("b_index", 0)
-            if a_idx < len(beliefs_a) and b_idx < len(beliefs_b):
-                enriched_agreements.append({
-                    "belief_a": beliefs_a[a_idx],
-                    "belief_b": beliefs_b[b_idx],
-                    "similarity": ag.get("similarity", 0.7),
-                    "note": ag.get("note", "")
-                })
+        values = []
+        for v in result.get("values", []):
+            name = v.get("name", "").lower().replace("-", "_").replace(" ", "_")
+            if name in ALL_VALUES:
+                values.append(ExtractedValue(
+                    name=name,
+                    weight=float(v.get("weight", 1.0)),
+                    mapping_confidence=float(v.get("mapping_confidence", 0.5))
+                ))
 
-        enriched_differences = []
-        for df in result.get("differences", []):
-            a_idx = df.get("a_index", 0)
-            b_idx = df.get("b_index", 0)
-            if a_idx < len(beliefs_a) and b_idx < len(beliefs_b):
-                enriched_differences.append({
-                    "belief_a": beliefs_a[a_idx],
-                    "belief_b": beliefs_b[b_idx],
-                    "note": df.get("note", "")
-                })
+        return [v for v in values if v.mapping_confidence >= 0.4][:3]
 
-        return {
-            "overall_similarity": result.get("overall_similarity", 0.5),
-            "core_similarity": result.get("core_similarity", 0.5),
-            "agreements": enriched_agreements,
-            "differences": enriched_differences,
-            "summary": result.get("summary", ""),
-            "unique_a": [],  # TODO: calculate unmatched
-            "unique_b": []
-        }
-
-    except (json.JSONDecodeError, anthropic.APIError) as e:
-        logger.error(f"Failed to calculate belief similarity: {e}")
-        return {
-            "overall_similarity": 0,
-            "core_similarity": 0,
-            "agreements": [],
-            "differences": [],
-            "summary": f"Couldn't calculate similarity: {e}",
-            "unique_a": [],
-            "unique_b": []
-        }
+    except Exception as e:
+        logger.warning(f"Failed to tag belief with values: {e}")
+        return []
 
 
-async def summarize_beliefs(beliefs: list[dict], topic: str = None) -> str:
-    """
-    Generate a natural language summary of beliefs.
+# ============================================
+# UTILITIES
+# ============================================
 
-    Args:
-        beliefs: List of belief dicts
-        topic: Optional topic to focus on
+def format_belief_for_display(belief: ExtractedBelief) -> str:
+    """Format a belief for user display."""
+    return f"*\"{belief.statement}\"*"
 
-    Returns:
-        A readable summary string
-    """
+
+def format_beliefs_for_close(beliefs: list[ExtractedBelief], max_display: int = 2) -> str:
+    """Format extracted beliefs for session close display."""
     if not beliefs:
-        if topic:
-            return f"No beliefs recorded about {topic} yet."
-        return "No beliefs recorded yet."
+        return ""
 
-    beliefs_text = "\n".join([
-        f"- {b['statement']} (confidence: {b.get('confidence', 0.5):.0%}, source: {b.get('source_type', 'unknown')})"
-        for b in beliefs
-    ])
+    # Take most confident beliefs
+    sorted_beliefs = sorted(beliefs, key=lambda b: b.confidence, reverse=True)
+    to_display = sorted_beliefs[:max_display]
 
-    topic_clause = f" about {topic}" if topic else ""
-
-    prompt = f"""Summarize these beliefs{topic_clause} in a natural, readable way.
-Don't just list them—synthesize them into a coherent picture of how this person thinks.
-Note any patterns, themes, or interesting tensions.
-Keep it concise (2-4 paragraphs max).
-
-Beliefs:
-{beliefs_text}"""
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.content[0].text
-
-    except anthropic.APIError as e:
-        logger.error(f"Failed to summarize beliefs: {e}")
-        # Fallback to simple list
-        return "Your beliefs:\n" + "\n".join([f"- {b['statement']}" for b in beliefs])
+    if len(to_display) == 1:
+        return f"I noticed something worth remembering:\n{format_belief_for_display(to_display[0])}"
+    else:
+        lines = ["I noticed a couple things worth remembering:"]
+        for b in to_display:
+            lines.append(format_belief_for_display(b))
+        return "\n".join(lines)
