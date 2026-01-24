@@ -4,6 +4,8 @@ import os
 import json
 import asyncio
 import random
+import time
+from collections import defaultdict
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
@@ -35,6 +37,39 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # How many messages before showing a belief summary
 MESSAGES_BEFORE_SUMMARY = 8
+
+# Rate limiting: messages per user per hour (0 = unlimited)
+RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "30"))
+
+# Track message timestamps per user for rate limiting
+user_message_times: dict[str, list[float]] = defaultdict(list)
+
+
+def check_rate_limit(user_id: str) -> tuple[bool, int]:
+    """
+    Check if user is rate limited.
+    Returns (is_allowed, seconds_until_reset).
+    """
+    if RATE_LIMIT_PER_HOUR <= 0:
+        return True, 0
+
+    now = time.time()
+    hour_ago = now - 3600
+
+    # Clean old timestamps and keep only last hour
+    user_message_times[user_id] = [
+        t for t in user_message_times[user_id] if t > hour_ago
+    ]
+
+    if len(user_message_times[user_id]) >= RATE_LIMIT_PER_HOUR:
+        # Calculate when oldest message will expire
+        oldest = min(user_message_times[user_id])
+        seconds_until_reset = int(oldest + 3600 - now) + 1
+        return False, seconds_until_reset
+
+    # Record this message
+    user_message_times[user_id].append(now)
+    return True, 0
 
 
 # === Onboarding Views ===
@@ -196,6 +231,17 @@ async def on_message(message: discord.Message):
 
     # Only respond in DMs or when mentioned
     if not is_dm and not is_mentioned:
+        return
+
+    # Check rate limit
+    is_allowed, wait_seconds = check_rate_limit(str(message.author.id))
+    if not is_allowed:
+        minutes = wait_seconds // 60
+        await message.reply(
+            f"You've hit the rate limit ({RATE_LIMIT_PER_HOUR} messages/hour). "
+            f"Try again in {minutes + 1} minute{'s' if minutes > 0 else ''}.",
+            mention_author=False
+        )
         return
 
     # Remove the mention from the message content
