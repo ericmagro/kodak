@@ -25,7 +25,7 @@ logger = logging.getLogger('kodak')
 from db import (
     init_db, get_or_create_user, update_user_personality,
     add_belief, get_user_beliefs, get_beliefs_by_topic,
-    soft_delete_belief, add_conversation_message, get_recent_conversation,
+    soft_delete_belief, restore_belief, add_conversation_message, get_recent_conversation,
     get_all_topics, complete_onboarding, set_tracking_paused,
     increment_message_count, reset_message_count, get_recent_beliefs,
     clear_all_user_data, export_user_data, add_belief_relation,
@@ -63,6 +63,9 @@ RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "0"))
 user_message_times: dict[str, list[float]] = defaultdict(list)
 _last_cleanup_time: float = 0.0
 _CLEANUP_INTERVAL: float = 3600.0  # Clean up inactive users every hour
+
+# Track last deleted belief per user for /undo functionality
+last_deleted_belief: dict[str, dict] = {}
 
 
 def _cleanup_inactive_users():
@@ -827,6 +830,7 @@ async def help_command(interaction: discord.Interaction):
         name="🔒 Privacy & Control",
         value=(
             "`/forget [id]` — Remove a specific belief\n"
+            "`/undo` — Restore the last forgotten belief\n"
             "`/pause` — Pause belief tracking\n"
             "`/resume` — Resume belief tracking\n"
             "`/export` — Download all your data\n"
@@ -925,13 +929,45 @@ async def explore_command(interaction: discord.Interaction, topic: str):
 
     if not beliefs:
         topics = await get_all_topics(str(interaction.user.id))
-        suggestion = ""
-        if topics:
-            suggestion = f"\n\nTopics I know about: {', '.join(topics[:10])}"
-        await interaction.followup.send(
-            f"No beliefs found about '{topic}'.{suggestion}",
-            ephemeral=True
-        )
+
+        if not topics:
+            await interaction.followup.send(
+                f"No beliefs found about '{topic}'.\n\n"
+                "You don't have any topics mapped yet. Keep chatting and I'll build your map!",
+                ephemeral=True
+            )
+            return
+
+        # Find similar topics (partial matches)
+        search_lower = topic.lower()
+        similar = [t for t in topics if search_lower in t or t in search_lower]
+
+        # Also check topic synonyms for related concepts
+        from db import TOPIC_SYNONYMS
+        # Find canonical form if searched term is a synonym
+        canonical = TOPIC_SYNONYMS.get(search_lower)
+        if canonical and canonical in topics and canonical not in similar:
+            similar.append(canonical)
+        # Find synonyms that map to the same canonical as existing topics
+        for t in topics:
+            if TOPIC_SYNONYMS.get(search_lower) == t or TOPIC_SYNONYMS.get(t) == search_lower:
+                if t not in similar:
+                    similar.append(t)
+
+        response = f"No beliefs found about '{topic}'.\n\n"
+
+        if similar:
+            response += "**Similar topics you have:**\n"
+            for t in similar[:5]:
+                response += f"• `/explore {t}`\n"
+            response += "\n"
+
+        # Show other topics if there's room
+        other_topics = [t for t in topics if t not in similar][:8]
+        if other_topics:
+            response += f"**Other topics:** {', '.join(other_topics)}"
+
+        await interaction.followup.send(response, ephemeral=True)
         return
 
     summary = await summarize_beliefs(beliefs, topic)
@@ -1126,12 +1162,50 @@ async def forget_command(interaction: discord.Interaction, belief_id: str):
     success = await soft_delete_belief(belief["id"], str(interaction.user.id))
 
     if success:
+        # Store for potential undo
+        last_deleted_belief[str(interaction.user.id)] = belief
+        logger.info(f"Belief forgotten by user:{interaction.user.id} - {belief['id'][:8]}")
+
         await interaction.followup.send(
-            f"Forgotten: *{belief['statement']}*",
+            f"Forgotten: *{belief['statement']}*\n\n"
+            f"*Changed your mind? Use `/undo` to restore it.*",
             ephemeral=True
         )
     else:
         await interaction.followup.send("Hmm, couldn't delete that one.", ephemeral=True)
+
+
+@bot.tree.command(name="undo", description="Restore the last forgotten belief")
+async def undo_command(interaction: discord.Interaction):
+    """Restore the most recently forgotten belief."""
+    user_id = str(interaction.user.id)
+
+    if user_id not in last_deleted_belief:
+        await interaction.response.send_message(
+            "Nothing to undo. Use `/forget` first to delete a belief.",
+            ephemeral=True
+        )
+        return
+
+    belief = last_deleted_belief[user_id]
+    success = await restore_belief(belief["id"], user_id)
+
+    if success:
+        # Clear from undo buffer
+        del last_deleted_belief[user_id]
+        logger.info(f"Belief restored by user:{user_id} - {belief['id'][:8]}")
+
+        await interaction.response.send_message(
+            f"Restored: *{belief['statement']}*",
+            ephemeral=True
+        )
+    else:
+        # Might have been permanently deleted or already restored
+        del last_deleted_belief[user_id]
+        await interaction.response.send_message(
+            "Couldn't restore that belief. It may have already been restored or permanently deleted.",
+            ephemeral=True
+        )
 
 
 @bot.tree.command(name="confidence", description="Update how confident you are in a belief")

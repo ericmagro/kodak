@@ -302,6 +302,7 @@ UserPersonality {
 - `/share-export` — export shareable beliefs as JSON file
 - `/compare-file` — compare with someone's exported file
 - `/forget [id]` — delete a belief (supports "last")
+- `/undo` — restore the last forgotten belief
 - `/pause` / `/resume` — toggle belief tracking
 - `/export` — download all data as JSON
 - `/backup` — download database backup file
@@ -431,8 +432,8 @@ Small things that make the experience better:
 
 - [ ] **Better `/map` visualization** — The ASCII art could be more beautiful/readable
 - [ ] **Smoother onboarding** — Fewer steps, less friction
-- [ ] **`/undo` command** — Restore the last forgotten belief (regret happens)
-- [ ] **Topic suggestions** — When `/explore` finds nothing, suggest similar topics
+- [x] **`/undo` command** — Restore the last forgotten belief (regret happens)
+- [x] **Topic suggestions** — When `/explore` finds nothing, suggest similar topics
 - [ ] **Richer error messages** — More personality, more helpful
 - [ ] **Conversation memory** — Reference earlier parts of the conversation naturally
 - [ ] **Belief merging** — Combine two beliefs that turned out to be the same
@@ -945,6 +946,7 @@ Or: Let them chat briefly with each personality before committing.
 - `/share-export` — Export shareable beliefs as JSON file
 - `/compare-file` — Compare with someone's exported file
 - `/forget [id]` — Supports "last" keyword for most recent
+- `/undo` — Restore the last forgotten belief
 - `/setup` — Interactive personality selection with previews
 - `/style` — Visual bar display for current settings
 - `/pause` / `/resume` — Toggle belief tracking

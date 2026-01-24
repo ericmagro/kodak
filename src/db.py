@@ -536,6 +536,17 @@ async def soft_delete_belief(belief_id: str, user_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+async def restore_belief(belief_id: str, user_id: str) -> bool:
+    """Restore a soft-deleted belief."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE beliefs SET is_deleted = 0 WHERE id = ? AND user_id = ? AND is_deleted = 1",
+            (belief_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
 async def set_belief_importance(belief_id: str, user_id: str, importance: int) -> bool:
     """Set the importance level of a belief (1-5)."""
     if importance < 1 or importance > 5:

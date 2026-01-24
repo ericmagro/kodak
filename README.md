@@ -78,6 +78,7 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 | `/setup` | Choose a personality preset |
 | `/style` | Fine-tune personality (warmth, directness, playfulness, formality) |
 | `/forget [id]` | Delete a belief (use `last` for most recent) |
+| `/undo` | Restore the last forgotten belief |
 | `/pause` | Pause belief tracking |
 | `/resume` | Resume tracking |
 | `/export` | Download all your data as JSON |
