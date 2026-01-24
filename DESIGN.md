@@ -206,6 +206,10 @@ This affects tone and probing style, not the underlying extraction.
 - `/share-values` — Export for comparison
 - `/compare-file` — Compare with someone's export
 
+### Summaries
+- `/summary week` — Weekly digest of your journaling
+- `/summaries` — View past summaries
+
 ### Data
 - `/export` — Download all your data
 - `/clear` — Delete everything
@@ -244,10 +248,13 @@ The bot is a thinking partner, not just a note-taker.
 ## What's Next
 
 Potential future directions:
+- **Monthly/yearly summaries** — Expanding on weekly digests
 - **Web visualization** — Interactive belief/value graphs
 - **Obsidian export** — Take your data into your notes app
 - **Longer-term patterns** — "Six months ago you said X. Still feel that way?"
 - **Group insights** — What does a community actually value?
+
+See [ROADMAP.md](ROADMAP.md) for the full list.
 
 ---
 

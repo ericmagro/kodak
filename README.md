@@ -74,6 +74,12 @@ Sessions adapt: share a lot and Kodak will explore further; keep it brief and it
 | `/share-values` | Export your values to share |
 | `/compare-file` | Compare with someone's export |
 
+### Summaries
+| Command | Description |
+|---------|-------------|
+| `/summary week` | Get a weekly digest of your journaling |
+| `/summaries` | View your past summaries |
+
 ### Privacy & Data
 | Command | Description |
 |---------|-------------|
