@@ -2,6 +2,7 @@
 
 import json
 import logging
+import pytz
 from datetime import datetime, timedelta
 from typing import Optional
 import anthropic
@@ -9,30 +10,84 @@ import anthropic
 from db import (
     get_sessions_in_range, get_beliefs_from_sessions, get_topics_frequency,
     get_user_value_profile, get_value_profile_at_date, store_summary,
-    get_past_summaries
+    get_past_summaries, get_or_create_user
 )
 from values import ALL_VALUES
 
 logger = logging.getLogger('kodak')
 
 # Initialize Anthropic client
-client = None
+_client = None
 
 
-def init_client(api_key: str):
-    """Initialize the Anthropic client."""
-    global client
-    client = anthropic.Anthropic(api_key=api_key)
+def init_client(api_key: str) -> bool:
+    """Initialize the Anthropic client. Returns True if successful."""
+    global _client
+    if _client is not None:
+        return True  # Already initialized
+    if not api_key:
+        logger.error("No API key provided for summaries client")
+        return False
+    _client = anthropic.Anthropic(api_key=api_key)
+    return True
+
+
+def get_client():
+    """Get the initialized client, raising if not available."""
+    if _client is None:
+        raise ValueError("Anthropic client not initialized. Call init_client first.")
+    return _client
+
+
+def get_user_timezone(user: dict) -> pytz.BaseTzInfo:
+    """Get the user's timezone, defaulting to UTC."""
+    tz_name = user.get('timezone') or 'UTC'
+    try:
+        return pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        logger.warning(f"Unknown timezone '{tz_name}', using UTC")
+        return pytz.UTC
+
+
+def format_date_friendly(date_str: str) -> str:
+    """Format ISO date string to friendly format like 'Jan 17'."""
+    try:
+        dt = datetime.fromisoformat(date_str)
+        return dt.strftime("%b %-d")
+    except (ValueError, TypeError):
+        return date_str
+
+
+def format_date_range(start_str: str, end_str: str) -> str:
+    """Format a date range like 'Jan 17 – Jan 24'."""
+    start = format_date_friendly(start_str)
+    end = format_date_friendly(end_str)
+    return f"{start} – {end}"
 
 
 # ============================================
 # DATA GATHERING
 # ============================================
 
-async def gather_week_data(user_id: str, end_date: datetime = None) -> dict:
-    """Gather all data needed for a weekly summary."""
+async def gather_week_data(user_id: str, end_date: datetime = None, user: dict = None) -> dict:
+    """Gather all data needed for a weekly summary.
+
+    Args:
+        user_id: The user's ID
+        end_date: End of the period (defaults to now in user's timezone)
+        user: User dict with timezone info (fetched if not provided)
+    """
+    # Get user for timezone if not provided
+    if user is None:
+        user = await get_or_create_user(user_id)
+
+    # Use user's timezone for date calculations
+    tz = get_user_timezone(user)
+
     if end_date is None:
-        end_date = datetime.now()
+        end_date = datetime.now(tz)
+    elif end_date.tzinfo is None:
+        end_date = tz.localize(end_date)
 
     start_date = end_date - timedelta(days=7)
 
@@ -204,8 +259,7 @@ Example: ["Highlight one.", "Highlight two.", "Highlight three."]"""
 
 async def generate_summary_narrative(data: dict) -> tuple[str, list[str]]:
     """Generate the summary narrative and highlights using Claude."""
-    if not client:
-        raise ValueError("Anthropic client not initialized. Call init_client first.")
+    client = get_client()
 
     # Generate main narrative
     narrative_prompt = generate_summary_prompt(data)
@@ -222,7 +276,7 @@ async def generate_summary_narrative(data: dict) -> tuple[str, list[str]]:
     highlights_prompt = generate_highlights_prompt(data)
     if highlights_prompt:
         try:
-            highlights_response = client.messages.create(
+            highlights_response = get_client().messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=300,
                 messages=[{"role": "user", "content": highlights_prompt}]
@@ -238,14 +292,62 @@ async def generate_summary_narrative(data: dict) -> tuple[str, list[str]]:
 
 
 # ============================================
+# DUPLICATE CHECKING
+# ============================================
+
+async def get_existing_summary_for_period(user_id: str, period_type: str, period_start: str, period_end: str) -> Optional[dict]:
+    """Check if a summary already exists for this exact period."""
+    summaries = await get_past_summaries(user_id, period_type, limit=5)
+    for s in summaries:
+        if s['period_start'] == period_start and s['period_end'] == period_end:
+            return s
+    return None
+
+
+# ============================================
 # MAIN ENTRY POINT
 # ============================================
 
-async def create_weekly_summary(user_id: str) -> dict:
-    """Create a weekly summary for a user. Returns the summary data and narrative."""
+async def create_weekly_summary(user_id: str, force_new: bool = False) -> dict:
+    """Create a weekly summary for a user. Returns the summary data and narrative.
 
-    # Gather data
-    data = await gather_week_data(user_id)
+    Args:
+        user_id: The user's ID
+        force_new: If True, create new summary even if one exists for this period
+    """
+    # Get user for timezone
+    user = await get_or_create_user(user_id)
+
+    # Gather data (uses user's timezone)
+    data = await gather_week_data(user_id, user=user)
+
+    # Check for existing summary for this period (unless forcing new)
+    if not force_new:
+        existing = await get_existing_summary_for_period(
+            user_id, 'week', data['period_start'], data['period_end']
+        )
+        if existing:
+            # Return the existing summary with parsed highlights
+            highlights = []
+            if existing.get('highlights'):
+                try:
+                    highlights = json.loads(existing['highlights'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            return {
+                'id': existing['id'],
+                'period_type': 'week',
+                'period_start': existing['period_start'],
+                'period_end': existing['period_end'],
+                'session_count': existing['session_count'],
+                'belief_count': existing['belief_count'],
+                'topics': data['topics'],  # Recalculated from current data
+                'value_changes': data['value_changes'],
+                'narrative': existing['narrative'],
+                'highlights': highlights,
+                'is_first_summary': False,
+                'is_cached': True  # Indicate this was retrieved, not generated
+            }
 
     # Generate narrative
     narrative, highlights = await generate_summary_narrative(data)
@@ -274,5 +376,41 @@ async def create_weekly_summary(user_id: str) -> dict:
         'value_changes': data['value_changes'],
         'narrative': narrative,
         'highlights': highlights,
-        'is_first_summary': data['is_first_summary']
+        'is_first_summary': data['is_first_summary'],
+        'is_cached': False
     }
+
+
+async def get_user_summaries(user_id: str, period_type: str = None, limit: int = 10) -> list[dict]:
+    """Get past summaries for a user, formatted for display.
+
+    Args:
+        user_id: The user's ID
+        period_type: Filter by 'week', 'month', or 'year' (None for all)
+        limit: Maximum number of summaries to return
+    """
+    summaries = await get_past_summaries(user_id, period_type, limit)
+
+    formatted = []
+    for s in summaries:
+        highlights = []
+        if s.get('highlights'):
+            try:
+                highlights = json.loads(s['highlights'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        formatted.append({
+            'id': s['id'],
+            'period_type': s['period_type'],
+            'period_start': s['period_start'],
+            'period_end': s['period_end'],
+            'date_range': format_date_range(s['period_start'], s['period_end']),
+            'session_count': s['session_count'],
+            'belief_count': s['belief_count'],
+            'narrative': s['narrative'],
+            'highlights': highlights,
+            'generated_at': s['generated_at']
+        })
+
+    return formatted

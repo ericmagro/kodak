@@ -849,22 +849,45 @@ async def get_user_value_profile(user_id: str) -> ValueProfile:
         )
 
 
-async def create_value_snapshot(user_id: str) -> str:
-    """Create a snapshot of user's current value profile."""
-    profile = await get_user_value_profile(user_id)
+async def create_value_snapshot(user_id: str, force: bool = False) -> Optional[str]:
+    """Create a snapshot of user's current value profile.
 
-    values_json = json.dumps({
-        v: profile.scores[v].normalized_score
-        for v in ALL_VALUES
-    })
+    Args:
+        user_id: The user's ID
+        force: If True, create snapshot even if one exists for today
 
-    snapshot_id = str(uuid.uuid4())
+    Returns:
+        The snapshot ID if created, None if skipped (already exists for today)
+    """
+    today = datetime.now().date().isoformat()
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # Check if snapshot already exists for today (unless forcing)
+        if not force:
+            cursor = await db.execute(
+                "SELECT id FROM value_snapshots WHERE user_id = ? AND snapshot_date = ?",
+                (user_id, today)
+            )
+            existing = await cursor.fetchone()
+            if existing:
+                return None  # Snapshot already exists for today
+
+        # Get current profile
+        profile = await get_user_value_profile(user_id)
+        if not profile:
+            return None
+
+        values_json = json.dumps({
+            v: profile.scores[v].normalized_score
+            for v in ALL_VALUES
+        })
+
+        snapshot_id = str(uuid.uuid4())
+
         await db.execute(
             """INSERT INTO value_snapshots (id, user_id, snapshot_date, values_json)
                VALUES (?, ?, ?, ?)""",
-            (snapshot_id, user_id, datetime.now().date().isoformat(), values_json)
+            (snapshot_id, user_id, today, values_json)
         )
         await db.commit()
 

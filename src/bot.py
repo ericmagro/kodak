@@ -17,6 +17,7 @@ from db import (
     create_session as db_create_session, get_active_session as db_get_active_session,
     end_session as db_end_session, update_session,
     get_user_value_profile, get_value_snapshot, update_user_value_profile,
+    create_value_snapshot,
     add_belief, add_belief_values, get_user_beliefs, get_belief,
     get_all_topics, get_beliefs_by_topic, get_important_beliefs,
     update_belief_confidence, update_belief_importance,
@@ -302,8 +303,12 @@ async def close_session(
     try:
         await update_user_value_profile(user_id)
         logger.info(f"Updated value profile for user {user_id}")
+
+        # Create value snapshot for tracking changes over time
+        await create_value_snapshot(user_id)
+        logger.info(f"Created value snapshot for user {user_id}")
     except Exception as e:
-        logger.error(f"Failed to update value profile: {e}")
+        logger.error(f"Failed to update value profile/snapshot: {e}")
 
     # End in-memory session
     end_session(user_id)
@@ -1588,6 +1593,11 @@ async def tensions_command(interaction: discord.Interaction):
 # SUMMARIES
 # ============================================
 
+# Discord embed limits
+EMBED_DESCRIPTION_LIMIT = 4096
+EMBED_FIELD_LIMIT = 1024
+
+
 @bot.tree.command(name="summary", description="Get a summary of your journaling")
 @app_commands.describe(period="Time period: week, month, or year")
 async def summary_command(
@@ -1615,11 +1625,24 @@ async def summary_command(
         return
 
     # Import here to avoid circular imports
-    from summaries import create_weekly_summary, init_client
+    from summaries import create_weekly_summary, init_client, format_date_range
 
-    # Initialize the client if needed
+    # Initialize the client with validation
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    init_client(api_key)
+    if not api_key:
+        logger.error("ANTHROPIC_API_KEY not set")
+        await interaction.followup.send(
+            "Summary generation is not configured. Please contact the bot admin.",
+            ephemeral=True
+        )
+        return
+
+    if not init_client(api_key):
+        await interaction.followup.send(
+            "Failed to initialize summary generation. Please try again later.",
+            ephemeral=True
+        )
+        return
 
     try:
         summary = await create_weekly_summary(user_id)
@@ -1631,22 +1654,34 @@ async def summary_command(
         )
         return
 
+    # Truncate narrative if needed (Discord embed limit)
+    narrative = summary['narrative']
+    if len(narrative) > EMBED_DESCRIPTION_LIMIT:
+        narrative = narrative[:EMBED_DESCRIPTION_LIMIT - 3] + "..."
+
     # Build the response embed
+    title = "Your Week in Reflection"
+    if summary.get('is_cached'):
+        title += " (cached)"
+
     embed = discord.Embed(
-        title="Your Week in Reflection",
-        description=summary['narrative'],
+        title=title,
+        description=narrative,
         color=0x7289da
     )
 
-    # Add stats
+    # Friendly date range and stats
+    date_range = format_date_range(summary['period_start'], summary['period_end'])
     stats = f"{summary['session_count']} sessions"
     if summary['belief_count'] > 0:
         stats += f" · {summary['belief_count']} beliefs emerged"
-    embed.set_footer(text=f"{summary['period_start']} to {summary['period_end']} · {stats}")
+    embed.set_footer(text=f"{date_range} · {stats}")
 
     # Add highlights if any
     if summary.get('highlights'):
         highlights_text = '\n'.join([f"• {h}" for h in summary['highlights']])
+        if len(highlights_text) > EMBED_FIELD_LIMIT:
+            highlights_text = highlights_text[:EMBED_FIELD_LIMIT - 3] + "..."
         embed.add_field(name="Highlights", value=highlights_text, inline=False)
 
     # Add value changes if any
@@ -1664,6 +1699,57 @@ async def summary_command(
         if top_topics:
             topics_text = ', '.join([t[0] for t in top_topics])
             embed.add_field(name="Top Topics", value=topics_text, inline=False)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="summaries", description="View your past summaries")
+@app_commands.describe(limit="Number of summaries to show (1-10)")
+async def summaries_command(
+    interaction: discord.Interaction,
+    limit: int = 5
+):
+    """View past summaries."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    limit = max(1, min(10, limit))  # Clamp to 1-10
+
+    # Import here to avoid circular imports
+    from summaries import get_user_summaries
+
+    try:
+        summaries = await get_user_summaries(user_id, period_type='week', limit=limit)
+    except Exception as e:
+        logger.error(f"Failed to get summaries: {e}")
+        await interaction.followup.send(
+            "Sorry, I couldn't retrieve your summaries.",
+            ephemeral=True
+        )
+        return
+
+    if not summaries:
+        await interaction.followup.send(
+            "You don't have any summaries yet. Use `/summary week` to generate your first one!",
+            ephemeral=True
+        )
+        return
+
+    # Build response
+    embed = discord.Embed(
+        title="Your Past Summaries",
+        description=f"Showing {len(summaries)} most recent weekly summaries",
+        color=0x7289da
+    )
+
+    for s in summaries:
+        # Truncate narrative for preview
+        preview = s['narrative'][:200] + "..." if len(s['narrative']) > 200 else s['narrative']
+
+        field_name = f"{s['date_range']} ({s['session_count']} sessions)"
+        embed.add_field(name=field_name, value=preview, inline=False)
+
+    embed.set_footer(text="Use /summary week to generate a new summary")
 
     await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -1747,7 +1833,8 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="📈 Summaries",
         value=(
-            "`/summary week` — Weekly digest of your journaling"
+            "`/summary week` — Weekly digest of your journaling\n"
+            "`/summaries` — View your past summaries"
         ),
         inline=False
     )
