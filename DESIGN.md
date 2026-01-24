@@ -442,7 +442,7 @@ Small things that make the experience better:
 For maintainability and contribution:
 
 - [ ] **Test suite** — Unit tests for extraction, database, commands
-- [ ] **Logging** — See what's happening in production (Railway)
+- [x] **Logging** — See what's happening in production (Railway)
 - [ ] **CI/CD pipeline** — Auto-run tests on PR
 - [ ] **Contributing guide** — How to add features, code style, etc.
 - [ ] **API documentation** — For the database and extraction functions

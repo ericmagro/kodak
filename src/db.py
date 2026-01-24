@@ -1,11 +1,14 @@
 """Database operations for Kodak."""
 
 import os
+import logging
 import aiosqlite
 import uuid
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger('kodak')
 
 # Allow DB_PATH to be configured via environment variable
 _default_db_path = Path(__file__).parent.parent / "kodak.db"
@@ -45,18 +48,18 @@ async def _run_migrations(db):
     for version, description, sql in MIGRATIONS:
         if version > current_version:
             try:
-                print(f"Running migration {version}: {description}")
+                logger.info(f"Running migration {version}: {description}")
                 await db.executescript(sql)
                 await db.execute(
                     "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
                     (version, datetime.now().isoformat())
                 )
                 await db.commit()
-                print(f"Migration {version} complete")
+                logger.info(f"Migration {version} complete")
             except aiosqlite.OperationalError as e:
                 # Column might already exist from schema.sql
                 if "duplicate column name" in str(e).lower():
-                    print(f"Migration {version}: Column already exists, skipping")
+                    logger.info(f"Migration {version}: Column already exists, skipping")
                     await db.execute(
                         "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
                         (version, datetime.now().isoformat())

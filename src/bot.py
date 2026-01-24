@@ -6,12 +6,21 @@ import asyncio
 import random
 import time
 import uuid
+import logging
 from datetime import datetime
 from collections import defaultdict
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('kodak')
 
 from db import (
     init_db, get_or_create_user, update_user_personality,
@@ -520,14 +529,14 @@ async def show_comparison_results(
 async def on_ready():
     """Called when bot is ready."""
     await init_db()
-    print(f"Kodak is online as {bot.user}")
+    logger.info(f"Bot started as {bot.user} (ID: {bot.user.id})")
 
     # Sync slash commands
     try:
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
+        logger.info(f"Synced {len(synced)} slash commands")
     except Exception as e:
-        print(f"Failed to sync commands: {e}")
+        logger.error(f"Failed to sync commands: {e}")
 
 
 @bot.event
@@ -549,9 +558,13 @@ async def on_message(message: discord.Message):
     if not is_dm and not is_mentioned:
         return
 
+    context = "DM" if is_dm else f"channel:{message.channel.id}"
+    logger.info(f"Message from user:{message.author.id} in {context}")
+
     # Check rate limit
     is_allowed, wait_seconds = check_rate_limit(str(message.author.id))
     if not is_allowed:
+        logger.info(f"Rate limited user:{message.author.id} (wait {wait_seconds}s)")
         minutes = wait_seconds // 60
         await message.reply(
             f"You've hit the rate limit ({RATE_LIMIT_PER_HOUR} messages/hour). "
@@ -646,6 +659,9 @@ async def on_message(message: discord.Message):
         new_beliefs = []
         if extraction_task:
             extraction_result = await extraction_task
+            belief_count = len(extraction_result.get("beliefs", []))
+            if belief_count > 0:
+                logger.info(f"Extracted {belief_count} belief(s) from user:{message.author.id}")
 
             for belief_data in extraction_result.get("beliefs", []):
                 new_belief = await add_belief(

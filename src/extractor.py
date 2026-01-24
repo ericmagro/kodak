@@ -1,8 +1,11 @@
 """Belief extraction using Claude API."""
 
 import json
+import logging
 import anthropic
 from typing import Optional
+
+logger = logging.getLogger('kodak')
 
 # Initialize client (will use ANTHROPIC_API_KEY env var)
 client = anthropic.Anthropic()
@@ -108,8 +111,10 @@ Message to analyze:
         return result
 
     except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse extraction response: {e}")
         return {"beliefs": [], "reasoning": f"Failed to parse extraction: {e}"}
     except anthropic.APIError as e:
+        logger.error(f"API error during extraction: {e}")
         return {"beliefs": [], "reasoning": f"API error: {e}"}
 
 
@@ -151,12 +156,15 @@ async def generate_response(
         return response.content[0].text
 
     except anthropic.RateLimitError:
+        logger.warning("Anthropic rate limit hit")
         return "Hmm, I need a quick breather—lots of good conversations happening right now. Try again in a moment?"
 
-    except anthropic.APIConnectionError:
+    except anthropic.APIConnectionError as e:
+        logger.error(f"Anthropic connection error: {e}")
         return "I seem to have lost my train of thought for a second. Could you try that again?"
 
-    except anthropic.APIError:
+    except anthropic.APIError as e:
+        logger.error(f"Anthropic API error: {e}")
         return "My mind went blank there for a moment. Mind saying that again?"
 
 
@@ -222,7 +230,8 @@ Only include meaningful, clear relationships. Empty array is fine if none found.
         result = json.loads(content)
         return result.get("relations", [])
 
-    except (json.JSONDecodeError, anthropic.APIError):
+    except (json.JSONDecodeError, anthropic.APIError) as e:
+        logger.warning(f"Failed to find belief relations: {e}")
         return []
 
 
@@ -330,6 +339,7 @@ Return valid JSON only:
         }
 
     except (json.JSONDecodeError, anthropic.APIError) as e:
+        logger.error(f"Failed to calculate belief similarity: {e}")
         return {
             "overall_similarity": 0,
             "core_similarity": 0,
@@ -381,5 +391,6 @@ Beliefs:
         return response.content[0].text
 
     except anthropic.APIError as e:
+        logger.error(f"Failed to summarize beliefs: {e}")
         # Fallback to simple list
         return "Your beliefs:\n" + "\n".join([f"- {b['statement']}" for b in beliefs])
