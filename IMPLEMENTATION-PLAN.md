@@ -95,7 +95,7 @@
 | 4.2 | `src/bot_v2.py` | Migrate `/history`, `/tensions`, `/changes`, `/mark`, `/confidence` | ✅ |
 | 4.3 | `src/bot_v2.py` | New: `/schedule`, `/timezone`, `/depth`, `/journal`, `/skip` | ✅ |
 | 4.4 | `src/bot_v2.py` | Migrate `/setup`, `/style`, `/pause`, `/resume` | ✅ |
-| 4.5 | `src/bot_v2.py` | Migrate `/export`, `/backup`, `/clear` | ✅ |
+| 4.5 | `src/bot_v2.py` | Migrate `/export`, `/clear` (removed `/backup` for security) | ✅ |
 | 4.6 | `src/bot_v2.py` | Updated `/help` for v2 | ✅ |
 | 4.7 | `src/scheduler.py` | Edge cases: re-engagement, missed prompts, mid-day schedule change | ✅ |
 
@@ -202,7 +202,7 @@
 | 2026-01-24 | Sprint 1 | Completed: schema-v2.sql, values.py, db_v2.py, scheduler.py, bot_v2.py. All tests passing. |
 | 2026-01-24 | Sprint 2 | Completed: onboarding.py, prompts.py, session.py, personality_v2.py, updated bot_v2.py. Full session flow implemented. |
 | 2026-01-24 | Sprint 3 | Completed: extractor_v2.py with value tagging, integrated extraction into sessions, added /values-history, beliefs shown at close. |
-| 2026-01-24 | Sprint 4 | Completed: All belief commands (/map, /beliefs, /explore, /belief, /forget, /undo, /history, /tensions, /changes, /mark, /confidence, /core), scheduling commands (/schedule, /timezone, /depth, /journal, /skip), user commands (/setup, /style, /pause, /resume), data commands (/export, /backup, /clear). Updated /help. Added scheduler edge cases (mid-day schedule change, periodic re-engagement). |
+| 2026-01-24 | Sprint 4 | Completed: All belief commands (/map, /beliefs, /explore, /belief, /forget, /undo, /history, /tensions, /changes, /mark, /confidence, /core), scheduling commands (/schedule, /timezone, /depth, /journal, /skip), user commands (/setup, /style, /pause, /resume), data commands (/export, /clear). Updated /help. Added scheduler edge cases (mid-day schedule change, periodic re-engagement). |
 | 2026-01-24 | Sprint 5 | Completed: File-based value comparison. Added export format with schema version 1.0. /share-values with privacy selection UI (choose values, optional beliefs, display name). /compare-file loads attached JSON and shows alignment %, shared priorities, differences. Updated /help. |
 | 2026-01-24 | Sprint 6 | Completed: Removed v1 files (bot.py, db.py, extractor.py, personality.py, schema.sql). Renamed v2 files (removed _v2 suffix). Updated imports. Archived DESIGN.md → DESIGN-v1.md, renamed DESIGN-v2.md → DESIGN.md. Updated README.md for v2 (journaling focus, new commands, values framework). Added auto-start instructions to SETUP.md (macOS launchd, Linux systemd, Windows Task Scheduler). |
 
