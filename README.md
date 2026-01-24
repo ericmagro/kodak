@@ -1,86 +1,98 @@
 # Kodak
 
-A Discord bot that helps you understand yourself through daily journaling.
+A Discord bot that reveals what you actually value—through daily conversation.
 
-Kodak is a reflective journaling companion. Each day at a time you choose, it checks in with a thoughtful prompt. Through natural conversation, it helps you explore what's on your mind—and over time, surfaces patterns in what you value.
+Most people can't articulate their values. Ask them and you get generic answers: "family, honesty, success." Kodak surfaces what you *really* prioritize by extracting beliefs from your reflections and mapping them to a validated psychological framework.
 
-## What It Does
+**What makes it different:**
+- **Automatic belief extraction** — Just talk naturally; Kodak identifies the beliefs underneath
+- **Real psychological framework** — Uses [Schwartz's 10 Basic Human Values](https://en.wikipedia.org/wiki/Theory_of_Basic_Human_Values), used in cross-cultural research worldwide
+- **Tracks change over time** — See how your values shift across weeks and months
+- **Honest, not sycophantic** — Kodak will notice contradictions and push back on your ideas
 
-- **Daily check-ins** at a time you choose (evening works best for most people)
-- **Adaptive sessions** that follow your energy—quick check-ins or deep exploration
-- **Extracts beliefs** from your reflections (you don't have to do anything special)
-- **Derives values** using Schwartz's 10 Basic Human Values framework
-- **Tracks change** — see how your values shift over weeks and months
-- **Enables comparison** — share your value profile with friends to see how you align
+## What a Session Looks Like
 
-## The Session Flow
+```
+Kodak: What's been sitting with you today?
 
-When Kodak checks in, a typical session looks like:
+You: Work stuff. My manager announced a reorg and I might
+     have to move teams. I'm not even sure I'm upset about
+     it but I can't stop thinking about it.
 
-1. **Opener** — A thoughtful prompt to get you reflecting
-2. **Exploration** — Follow-up questions that go deeper (adapts to your response length)
-3. **Closure** — A gentle wrap-up, sometimes surfacing beliefs it noticed
+Kodak: What is it about the uncertainty that's hard to let go of?
 
-Sessions adapt: share a lot and Kodak will explore further; keep it brief and it wraps up quickly.
+You: I think it's that I finally felt like I knew what I was
+     doing. Now I might have to start over proving myself again.
+
+Kodak: That's interesting—it sounds less about the team and
+       more about losing a sense of competence you'd built up.
+       Is that fair?
+
+You: Yeah, actually. I hadn't thought of it that way.
+```
+
+Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief and it wraps up quickly.
+
+## Core Features
+
+| Feature | What it does |
+|---------|--------------|
+| **Daily check-ins** | Thoughtful prompts at a time you choose |
+| **Belief extraction** | Surfaces what you believe from natural conversation |
+| **Value profiling** | Maps beliefs to Schwartz's 10 values |
+| **Weekly summaries** | Patterns, themes, and value shifts from your week |
+| **Value comparison** | Share your profile to see how you align with others |
+| **Personality presets** | Choose your conversational style (philosopher, therapist, trickster, etc.) |
+
+## Privacy First
+
+- All data stored locally—journal entries never leave your machine
+- `/export` to download everything as JSON
+- `/clear` to delete all your data
+- `/pause` to chat without belief tracking
 
 ## Commands
 
-### Scheduling
+### Getting Started
 | Command | Description |
 |---------|-------------|
-| `/schedule [time]` | Set your daily check-in time |
-| `/skip` | Skip today's check-in |
-| `/pause` | Pause all check-ins |
-| `/resume` | Resume check-ins |
 | `/journal` | Start a session right now |
-| `/timezone [tz]` | Set your timezone |
-
-### Personality
-| Command | Description |
-|---------|-------------|
-| `/setup` | Choose a personality preset |
-| `/depth` | Set session depth (quick/standard/deep) |
-| `/style` | View your personality dimensions |
+| `/schedule [time]` | Set your daily check-in time |
+| `/values` | See your value profile |
+| `/summary week` | Get your weekly digest |
+| `/help` | See all commands |
 
 ### Beliefs
 | Command | Description |
 |---------|-------------|
-| `/map` | View your belief map by topic |
-| `/beliefs` | Raw list with IDs |
+| `/map` | View beliefs organized by topic |
+| `/beliefs` | List all beliefs with IDs |
 | `/belief [id]` | View one belief in detail |
-| `/explore [topic]` | Dive into beliefs about a topic |
+| `/explore [topic]` | Dive into a specific topic |
 | `/core` | Show your most important beliefs |
+| `/tensions` | Find potentially conflicting beliefs |
 
-### Edit Beliefs
+### Values & Summaries
 | Command | Description |
 |---------|-------------|
-| `/confidence [id] [level]` | Update how certain you are |
-| `/mark [id] [1-5]` | Set how important a belief is |
-| `/forget [id]` | Delete a belief |
-| `/undo` | Restore last deleted belief |
-
-### History & Analysis
-| Command | Description |
-|---------|-------------|
-| `/history [id]` | See how a belief has evolved |
-| `/changes [days]` | See beliefs that changed recently |
-| `/tensions` | Show potentially conflicting beliefs |
-
-### Values
-| Command | Description |
-|---------|-------------|
-| `/values` | See your value profile |
+| `/values` | See your current value profile |
 | `/values-history` | See how values shifted over time |
+| `/summary week` | Weekly digest with patterns and insights |
+| `/summaries` | View past summaries |
 | `/share-values` | Export your values to share |
 | `/compare-file` | Compare with someone's export |
 
-### Summaries
+### Scheduling & Preferences
 | Command | Description |
 |---------|-------------|
-| `/summary week` | Get a weekly digest of your journaling |
-| `/summaries` | View your past summaries |
+| `/schedule [time]` | Set daily check-in time |
+| `/timezone [tz]` | Set your timezone |
+| `/skip` | Skip today's check-in |
+| `/pause` / `/resume` | Pause or resume check-ins |
+| `/setup` | Choose a personality preset |
+| `/depth` | Set session depth (quick/standard/deep) |
 
-### Privacy & Data
+### Data Management
 | Command | Description |
 |---------|-------------|
 | `/export` | Download all your data (JSON) |
@@ -88,54 +100,50 @@ Sessions adapt: share a lot and Kodak will explore further; keep it brief and it
 
 ## Personality Presets
 
-Choose how Kodak shows up in your conversations:
+Choose how Kodak shows up:
 
-- **The Philosopher** — Thoughtful, probing, asks "why"
+- **The Philosopher** — Probing, asks "why," examines assumptions
 - **The Best Friend** — Warm, honest, supportive
 - **The Scientist** — Precise, analytical, evidence-focused
-- **The Trickster** — Playful, irreverent, challenges assumptions
-- **The Therapist** — Empathetic, safe, never pushes
+- **The Trickster** — Playful, irreverent, challenges you
+- **The Therapist** — Gentle, safe, never pushes
 
-## Values Framework
+## The Values Framework
 
-Kodak uses Schwartz's 10 Basic Human Values to understand what matters to you:
+Kodak uses Schwartz's 10 Basic Human Values—a research-backed framework used in psychology worldwide:
 
-| Value | Description |
-|-------|-------------|
-| Universalism | Tolerance, social justice, equality |
-| Benevolence | Helpfulness, honesty, loyalty to close others |
-| Tradition | Respect for customs, humility |
-| Conformity | Obedience, self-discipline, politeness |
-| Security | Safety, stability, social order |
-| Achievement | Success, competence, ambition |
-| Power | Authority, wealth, recognition |
-| Self-Direction | Creativity, freedom, independence |
+| Value | What it means |
+|-------|---------------|
+| Self-Direction | Independence, creativity, freedom |
 | Stimulation | Excitement, novelty, challenge |
 | Hedonism | Pleasure, enjoying life |
+| Achievement | Success, competence, ambition |
+| Power | Authority, wealth, social status |
+| Security | Safety, stability, order |
+| Conformity | Obedience, self-discipline |
+| Tradition | Respect for customs, humility |
+| Benevolence | Helping those close to you |
+| Universalism | Tolerance, social justice for all |
 
-Your beliefs are tagged with relevant values, and over time Kodak builds a profile of what you prioritize.
+Your beliefs are automatically tagged with relevant values. Over time, this builds a profile of what you actually prioritize—not what you think you should value.
 
 ## Run Your Own
 
-Two options:
-
 ### Railway (Recommended)
-Deploy to Railway for always-on hosting (~$5/month):
+Always-on cloud hosting (~$5/month):
 1. Fork this repo
 2. Connect to Railway
 3. Add a volume mounted at `/data`
 4. Set environment variables: `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`, `KODAK_DB_PATH=/data/kodak.db`
 
 ### Local
-Run on your own computer (free, but only works while running):
-
+Free, but only runs while your computer is on:
 ```bash
 git clone https://github.com/ericmagro/kodak.git
 cd kodak
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your tokens
+cp .env.example .env  # Add your tokens
 cd src && python bot.py
 ```
 
@@ -143,22 +151,15 @@ cd src && python bot.py
 
 ## Cost
 
-Each message costs ~$0.01-0.02 (Anthropic API). A typical daily session might cost $0.05-0.20.
-
-## Privacy
-
-- All data stored locally in `kodak.db` on your computer
-- Journal entries never leave your machine
-- Value exports only include what you choose to share
-- `/pause` to chat without tracking
-- `/export` to download your data
-- `/clear` to delete everything
+Each message costs ~$0.01-0.02 (Anthropic API). A typical daily session runs $0.05-0.20.
 
 ## Design Philosophy
 
-Kodak is designed to be a genuine companion, not a sycophant. It won't validate everything you say—it'll engage honestly, notice contradictions, and sometimes disagree.
+Kodak is designed to be a genuine thinking partner, not a yes-man.
 
-This is intentional. Research shows sycophantic AI makes people more certain and less open. Kodak aims for the opposite: helping you understand yourself more clearly, including the parts that are messy or contradictory.
+Most AI assistants validate everything you say. This feels good but doesn't help you grow. Kodak engages honestly—noticing contradictions, questioning assumptions, sometimes disagreeing.
+
+The goal isn't to make you feel good about what you believe. It's to help you see what you *actually* believe, and whether those beliefs serve you.
 
 ## License
 
