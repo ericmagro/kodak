@@ -423,7 +423,15 @@ async def help_command(interaction: discord.Interaction):
         inline=False
     )
 
-    embed.set_footer(text="Or just talk to me naturally—I'll figure out what you mean.")
+    embed.add_field(
+        name="📊 Reading Confidence",
+        value=(
+            "`[●●●●●]` Certain — `[●●●○○]` Moderate — `[●○○○○]` Tentative"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Command responses are private and disappear after a while. Use /export to save.")
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -467,13 +475,12 @@ async def map_command(interaction: discord.Interaction):
         response += "```\n"
         for topic in topics[:5]:  # Limit to 5 topics
             topic_beliefs = await get_beliefs_by_topic(str(interaction.user.id), topic)
-            response += f"{'─' * 30}\n"
+            response += f"{'─' * 40}\n"
             response += f"  {topic.upper()}\n"
-            response += f"{'─' * 30}\n"
-            for b in topic_beliefs[:3]:  # Limit to 3 beliefs per topic
-                stmt = b['statement'][:50] + "..." if len(b['statement']) > 50 else b['statement']
+            response += f"{'─' * 40}\n"
+            for b in topic_beliefs[:2]:  # Limit to 2 beliefs per topic for space
                 conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
-                response += f"  [{conf}] {stmt}\n"
+                response += f"  [{conf}] {b['statement']}\n"
             response += "\n"
         response += "```\n"
 
@@ -534,17 +541,18 @@ async def beliefs_command(interaction: discord.Interaction):
         return
 
     lines = []
-    for b in beliefs[:25]:
+    for b in beliefs[:20]:  # Reduced to fit more content per belief
         conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
         topics = ", ".join(b.get("topics", []))
-        lines.append(f"`{b['id'][:8]}` [{conf}] {b['statement']}")
-        if topics:
-            lines[-1] += f" *({topics})*"
+        topic_str = f" *({topics})*" if topics else ""
+        lines.append(f"`{b['id'][:8]}` [{conf}] {b['statement']}{topic_str}")
 
-    response = "**Your Beliefs:**\n\n" + "\n".join(lines)
+    response = "**Your Beliefs:**\n"
+    response += "*Confidence: ●=certain, ○=uncertain*\n\n"
+    response += "\n\n".join(lines)  # Double newline for readability
 
-    if len(beliefs) > 25:
-        response += f"\n\n*...and {len(beliefs) - 25} more*"
+    if len(beliefs) > 20:
+        response += f"\n\n*...and {len(beliefs) - 20} more*"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
