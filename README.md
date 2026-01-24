@@ -49,7 +49,7 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 | `/beliefs` | Raw list with IDs |
 | `/belief [id]` | View one belief with its connections |
 | `/setup` | Choose a personality preset |
-| `/style` | Fine-tune personality (warmth, playfulness, etc.) |
+| `/style` | Fine-tune personality (warmth, directness, playfulness, formality) |
 | `/forget [id]` | Delete a belief (use `last` for most recent) |
 | `/pause` | Pause belief tracking |
 | `/resume` | Resume tracking |
@@ -59,7 +59,7 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 ## Personality Presets
 
 - 🏛️ **The Philosopher** — Thoughtful and probing
-- 💛 **The Best Friend** — Warm and fun
+- 💛 **The Best Friend** — Warm and honest
 - 🔬 **The Scientist** — Precise and analytical
 - 🃏 **The Trickster** — Playful and irreverent
 - 🌿 **The Therapist** — Empathetic and safe

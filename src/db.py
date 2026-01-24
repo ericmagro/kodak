@@ -47,8 +47,8 @@ async def get_or_create_user(user_id: str, username: str = None) -> dict:
 async def update_user_personality(
     user_id: str,
     warmth: int = None,
+    directness: int = None,
     playfulness: int = None,
-    challenge: int = None,
     formality: int = None,
     extraction_mode: str = None
 ) -> dict:
@@ -59,12 +59,12 @@ async def update_user_personality(
     if warmth is not None:
         updates.append("warmth = ?")
         values.append(warmth)
+    if directness is not None:
+        updates.append("directness = ?")
+        values.append(directness)
     if playfulness is not None:
         updates.append("playfulness = ?")
         values.append(playfulness)
-    if challenge is not None:
-        updates.append("challenge = ?")
-        values.append(challenge)
     if formality is not None:
         updates.append("formality = ?")
         values.append(formality)

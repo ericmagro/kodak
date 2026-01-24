@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT,                       -- Cached username
     warmth INTEGER DEFAULT 3,            -- 1-5 scale
     playfulness INTEGER DEFAULT 3,       -- 1-5 scale
-    challenge INTEGER DEFAULT 3,         -- 1-5 scale
+    directness INTEGER DEFAULT 3,        -- 1-5 scale
     formality INTEGER DEFAULT 3,         -- 1-5 scale
     extraction_mode TEXT DEFAULT 'active', -- active | passive | hybrid
     onboarding_complete INTEGER DEFAULT 0, -- Has user completed onboarding?

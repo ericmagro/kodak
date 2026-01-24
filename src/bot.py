@@ -68,7 +68,7 @@ class PersonalitySelect(ui.Select):
             str(interaction.user.id),
             warmth=preset["warmth"],
             playfulness=preset["playfulness"],
-            challenge=preset["challenge"],
+            directness=preset["directness"],
             formality=preset["formality"]
         )
 
@@ -744,20 +744,20 @@ async def clear_command(interaction: discord.Interaction):
 @bot.tree.command(name="style", description="Fine-tune personality dimensions")
 @app_commands.describe(
     warmth="1 (analytical) to 5 (warm)",
+    directness="1 (gentle) to 5 (blunt)",
     playfulness="1 (serious) to 5 (playful)",
-    challenge="1 (accepting) to 5 (Socratic)",
     formality="1 (casual) to 5 (formal)"
 )
 async def style_command(
     interaction: discord.Interaction,
     warmth: int = None,
+    directness: int = None,
     playfulness: int = None,
-    challenge: int = None,
     formality: int = None
 ):
     """Fine-tune personality dimensions."""
-    for name, val in [("warmth", warmth), ("playfulness", playfulness),
-                      ("challenge", challenge), ("formality", formality)]:
+    for name, val in [("warmth", warmth), ("directness", directness),
+                      ("playfulness", playfulness), ("formality", formality)]:
         if val is not None and (val < 1 or val > 5):
             await interaction.response.send_message(
                 f"{name} must be between 1 and 5.",
@@ -769,8 +769,8 @@ async def style_command(
     user = await update_user_personality(
         str(interaction.user.id),
         warmth=warmth,
+        directness=directness,
         playfulness=playfulness,
-        challenge=challenge,
         formality=formality
     )
 
@@ -782,8 +782,8 @@ async def style_command(
         f"**Your Style:**\n"
         f"```\n"
         f"Warmth:      [{bar(user['warmth'])}] {user['warmth']}/5\n"
+        f"Directness:  [{bar(user['directness'])}] {user['directness']}/5\n"
         f"Playfulness: [{bar(user['playfulness'])}] {user['playfulness']}/5\n"
-        f"Challenge:   [{bar(user['challenge'])}] {user['challenge']}/5\n"
         f"Formality:   [{bar(user['formality'])}] {user['formality']}/5\n"
         f"```",
         ephemeral=True

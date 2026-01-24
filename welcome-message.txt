@@ -1,0 +1,23 @@
+Welcome to Kodak 📸
+
+Kodak is a bot that maps your beliefs through conversation. Just chat naturally, and it builds a picture of what you think and why — your assumptions, values, and how ideas connect.
+
+**How to use:**
+1. Click on @Kodak in the member list (right sidebar)
+2. Click "Message" to start a DM
+3. Just talk! It'll ask follow-up questions and start mapping
+
+**Commands:**
+• `/map` — See your belief map
+• `/beliefs` — Raw list of everything captured
+• `/belief [id]` — See one belief with its connections
+• `/pause` — Stop tracking (keep chatting)
+• `/export` — Download your data
+• `/clear` — Delete everything
+
+**Privacy:**
+• Only YOU can see your beliefs
+• All command responses are private
+• Want full control? Run your own instance: https://github.com/ericmagro/kodak
+
+Questions? Ask in #general
