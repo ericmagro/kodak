@@ -1024,6 +1024,141 @@ async def clear_all_user_data(user_id: str) -> bool:
         await db.execute("DELETE FROM journal_sessions WHERE user_id = ?", (user_id,))
         await db.execute("DELETE FROM user_values WHERE user_id = ?", (user_id,))
         await db.execute("DELETE FROM value_snapshots WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM summaries WHERE user_id = ?", (user_id,))
         await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         await db.commit()
         return True
+
+
+# ============================================
+# SUMMARIES
+# ============================================
+
+async def get_sessions_in_range(user_id: str, start_date: str, end_date: str) -> list[dict]:
+    """Get completed sessions within a date range."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM journal_sessions
+               WHERE user_id = ?
+                 AND ended_at IS NOT NULL
+                 AND started_at >= ?
+                 AND started_at < ?
+               ORDER BY started_at""",
+            (user_id, start_date, end_date)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_beliefs_from_sessions(user_id: str, session_ids: list[str]) -> list[dict]:
+    """Get beliefs extracted from specific sessions."""
+    if not session_ids:
+        return []
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        placeholders = ','.join('?' * len(session_ids))
+        cursor = await db.execute(
+            f"""SELECT * FROM beliefs
+               WHERE user_id = ?
+                 AND session_id IN ({placeholders})
+                 AND is_deleted = 0
+               ORDER BY first_expressed""",
+            [user_id] + session_ids
+        )
+        beliefs = [dict(row) for row in await cursor.fetchall()]
+
+        # Fetch topics for each belief
+        for belief in beliefs:
+            cursor = await db.execute(
+                "SELECT topic FROM belief_topics WHERE belief_id = ?",
+                (belief['id'],)
+            )
+            belief['topics'] = [r['topic'] for r in await cursor.fetchall()]
+
+            # Fetch values for each belief
+            cursor = await db.execute(
+                "SELECT value_name, weight FROM belief_values WHERE belief_id = ?",
+                (belief['id'],)
+            )
+            belief['values'] = [dict(r) for r in await cursor.fetchall()]
+
+        return beliefs
+
+
+async def get_topics_frequency(beliefs: list[dict]) -> dict[str, int]:
+    """Count topic frequency from a list of beliefs."""
+    topic_counts = {}
+    for belief in beliefs:
+        for topic in belief.get('topics', []):
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
+    return dict(sorted(topic_counts.items(), key=lambda x: -x[1]))
+
+
+async def store_summary(
+    user_id: str,
+    period_type: str,
+    period_start: str,
+    period_end: str,
+    data_json: str,
+    narrative: str,
+    highlights: str,
+    session_count: int,
+    belief_count: int
+) -> str:
+    """Store a generated summary."""
+    summary_id = str(uuid.uuid4())
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO summaries
+               (id, user_id, period_type, period_start, period_end,
+                data_json, narrative, highlights, session_count, belief_count)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (summary_id, user_id, period_type, period_start, period_end,
+             data_json, narrative, highlights, session_count, belief_count)
+        )
+        await db.commit()
+
+    return summary_id
+
+
+async def get_past_summaries(user_id: str, period_type: str = None, limit: int = 10) -> list[dict]:
+    """Get past summaries for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        if period_type:
+            cursor = await db.execute(
+                """SELECT * FROM summaries
+                   WHERE user_id = ? AND period_type = ?
+                   ORDER BY period_start DESC
+                   LIMIT ?""",
+                (user_id, period_type, limit)
+            )
+        else:
+            cursor = await db.execute(
+                """SELECT * FROM summaries
+                   WHERE user_id = ?
+                   ORDER BY period_start DESC
+                   LIMIT ?""",
+                (user_id, limit)
+            )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_value_profile_at_date(user_id: str, target_date: str) -> Optional[dict]:
+    """Get the value profile snapshot closest to (but not after) a target date."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM value_snapshots
+               WHERE user_id = ? AND snapshot_date <= ?
+               ORDER BY snapshot_date DESC
+               LIMIT 1""",
+            (user_id, target_date)
+        )
+        row = await cursor.fetchone()
+        if row:
+            return json.loads(row['values_json'])
+        return None

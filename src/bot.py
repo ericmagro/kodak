@@ -1584,6 +1584,90 @@ async def tensions_command(interaction: discord.Interaction):
     await interaction.followup.send(response, ephemeral=True)
 
 
+# ============================================
+# SUMMARIES
+# ============================================
+
+@bot.tree.command(name="summary", description="Get a summary of your journaling")
+@app_commands.describe(period="Time period: week, month, or year")
+async def summary_command(
+    interaction: discord.Interaction,
+    period: str = "week"
+):
+    """Generate a summary of journaling activity."""
+    await interaction.response.defer(ephemeral=True)
+
+    user_id = str(interaction.user.id)
+    period = period.lower().strip()
+
+    if period not in ['week', 'month', 'year']:
+        await interaction.followup.send(
+            "Period must be `week`, `month`, or `year`. Try `/summary week`",
+            ephemeral=True
+        )
+        return
+
+    if period in ['month', 'year']:
+        await interaction.followup.send(
+            f"Monthly and yearly summaries coming soon! For now, try `/summary week`",
+            ephemeral=True
+        )
+        return
+
+    # Import here to avoid circular imports
+    from summaries import create_weekly_summary, init_client
+
+    # Initialize the client if needed
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    init_client(api_key)
+
+    try:
+        summary = await create_weekly_summary(user_id)
+    except Exception as e:
+        logger.error(f"Failed to create summary: {e}")
+        await interaction.followup.send(
+            "Sorry, I couldn't generate your summary. Try again later.",
+            ephemeral=True
+        )
+        return
+
+    # Build the response embed
+    embed = discord.Embed(
+        title="Your Week in Reflection",
+        description=summary['narrative'],
+        color=0x7289da
+    )
+
+    # Add stats
+    stats = f"{summary['session_count']} sessions"
+    if summary['belief_count'] > 0:
+        stats += f" · {summary['belief_count']} beliefs emerged"
+    embed.set_footer(text=f"{summary['period_start']} to {summary['period_end']} · {stats}")
+
+    # Add highlights if any
+    if summary.get('highlights'):
+        highlights_text = '\n'.join([f"• {h}" for h in summary['highlights']])
+        embed.add_field(name="Highlights", value=highlights_text, inline=False)
+
+    # Add value changes if any
+    if summary.get('value_changes'):
+        changes = []
+        for name, v in summary['value_changes'].items():
+            direction = "↑" if v['change'] > 0 else "↓"
+            changes.append(f"{name}: {direction} {abs(v['change']):.0%}")
+        if changes:
+            embed.add_field(name="Value Shifts", value='\n'.join(changes), inline=False)
+
+    # Add top topics if any
+    if summary.get('topics'):
+        top_topics = list(summary['topics'].items())[:3]
+        if top_topics:
+            topics_text = ', '.join([t[0] for t in top_topics])
+            embed.add_field(name="Top Topics", value=topics_text, inline=False)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="help", description="Show available commands")
 async def help_command(interaction: discord.Interaction):
     """Show help information."""
@@ -1656,6 +1740,14 @@ async def help_command(interaction: discord.Interaction):
             "`/values-history` — See how values changed over time\n"
             "`/share-values` — Export your values to share\n"
             "`/compare-file` — Compare with someone's export"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📈 Summaries",
+        value=(
+            "`/summary week` — Weekly digest of your journaling"
         ),
         inline=False
     )

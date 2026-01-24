@@ -189,6 +189,34 @@ CREATE TABLE IF NOT EXISTS conversations (
 );
 
 -- ============================================
+-- SUMMARIES (weekly, monthly, yearly)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS summaries (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+
+    -- Period
+    period_type TEXT NOT NULL,                     -- 'week', 'month', 'year'
+    period_start TEXT NOT NULL,                    -- ISO date
+    period_end TEXT NOT NULL,                      -- ISO date
+
+    -- Raw data (for regeneration/analysis)
+    data_json TEXT NOT NULL,                       -- Structured data: sessions, beliefs, topics, value changes
+
+    -- Generated content
+    narrative TEXT,                                -- The LLM-generated summary text
+    highlights TEXT,                               -- Short punchy insights (JSON array)
+
+    -- Metadata
+    session_count INTEGER DEFAULT 0,
+    belief_count INTEGER DEFAULT 0,
+    generated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- ============================================
 -- SCHEMA VERSION (for migrations)
 -- ============================================
 
@@ -199,6 +227,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 -- Mark as v2 schema
 INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (100, CURRENT_TIMESTAMP);
+INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (101, CURRENT_TIMESTAMP);
 
 -- ============================================
 -- INDEXES
@@ -213,3 +242,5 @@ CREATE INDEX IF NOT EXISTS idx_belief_values_belief ON belief_values(belief_id);
 CREATE INDEX IF NOT EXISTS idx_belief_values_value ON belief_values(value_name);
 CREATE INDEX IF NOT EXISTS idx_user_values_user ON user_values(user_id);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_user ON value_snapshots(user_id);
+CREATE INDEX IF NOT EXISTS idx_summaries_user ON summaries(user_id);
+CREATE INDEX IF NOT EXISTS idx_summaries_period ON summaries(user_id, period_type, period_start);
