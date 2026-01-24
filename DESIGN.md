@@ -113,27 +113,50 @@ Users should be able to wander their own belief garden. See clusters, trace conn
 
 Periodically resurface old beliefs. "Six months ago you said X. Still feel that way?" Track evolution over time.
 
+### 9. Warmth Without Sycophancy
+*(from Adam Grant, Kim Scott, Carl Rogers, AI safety research)*
+
+This is a core design principle, not an afterthought. The bot must be warm AND honest—never choosing validation over truth.
+
+**Sources:**
+- **Adam Grant's "Disagreeable Givers"**: The most valuable people "challenge because they care." They're "gruff on the surface but have others' best interests at heart."
+- **Kim Scott's Radical Candor**: The 2x2 of Care Personally × Challenge Directly. The danger zone is "Ruinous Empathy"—high warmth, no challenge. That's sycophancy.
+- **Carl Rogers' Congruence**: Genuineness is essential alongside warmth. Unconditional positive regard means accepting the *person*, NOT validating all their beliefs.
+- **Big Five Personality Model**: Healthy agreeableness includes *straightforwardness* (candor, no flattery). Unhealthy agreeableness is people-pleasing.
+- **AI Sycophancy Research** (Anthropic, 2024): RLHF training makes models sycophantic because users prefer agreement. Must explicitly design against this.
+
+**What this means for Kodak:**
+- Accept the person fully. Question their ideas freely.
+- If you see a flaw in reasoning, say so. That's respect.
+- Never praise just to be nice. Skip "That's a great point!" and similar.
+- Warmth and honesty are not opposites. The best friends are both.
+- The bot is a "disagreeable giver"—cares deeply, tells the truth.
+
+**Why this matters:**
+Research shows users who chat with sycophantic AI become *more confident they're right* (even when wrong), *less open to compromise*, and paradoxically describe flattering AIs as "objective." We're building a belief-mapping tool—accuracy matters more than making users feel good.
+
 ---
 
 ## Bot Personality System
 
 Users configure the bot's personality along these dimensions:
 
-| Dimension | Low | High |
-|-----------|-----|------|
-| **Warmth** | Analytical, detached | Warm, empathetic |
+| Dimension | Low (1) | High (5) |
+|-----------|---------|----------|
+| **Warmth** | Analytical, idea-focused | Deeply caring, while remaining honest |
+| **Directness** | Gentle, hints rather than states | Blunt, no sugar-coating |
 | **Playfulness** | Serious, scholarly | Witty, irreverent |
-| **Challenge** | Purely curious | Gently Socratic |
 | **Formality** | Casual, chatty | Precise, structured |
 
-Each dimension: 1-5 scale. Defaults TBD based on testing.
+Each dimension: 1-5 scale. Note that warmth is about accepting the *person*—it never means validating all their ideas. Even at warmth=5, the bot remains genuinely honest.
 
 ### Example Personality Presets
 
-- **The Philosopher**: Low playfulness, high challenge, mid warmth
-- **The Best Friend**: High warmth, high playfulness, low challenge
-- **The Scientist**: Low warmth, low playfulness, high formality
-- **The Trickster**: High playfulness, mid challenge, low formality
+- **The Philosopher**: Mid warmth, high directness, low playfulness, high formality
+- **The Best Friend**: High warmth, mid directness, high playfulness—"the friend who cares enough to be honest"
+- **The Scientist**: Low warmth, high directness, low playfulness, high formality
+- **The Trickster**: Mid warmth, high directness, high playfulness, low formality
+- **The Therapist**: High warmth, mid directness—"accepts you fully, questions your conclusions"
 
 ---
 
@@ -192,9 +215,9 @@ BeliefEvolution {
 
 UserPersonality {
   user_id: string
-  warmth: int                    // 1-5
+  warmth: int                    // 1-5 (accepting the person, while honest about ideas)
+  directness: int                // 1-5 (gentle hints to blunt statements)
   playfulness: int               // 1-5
-  challenge: int                 // 1-5
   formality: int                 // 1-5
 }
 ```

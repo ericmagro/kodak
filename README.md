@@ -64,6 +64,25 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 - 🃏 **The Trickster** — Playful and irreverent
 - 🌿 **The Therapist** — Empathetic and safe
 
+## Design Philosophy: Honest Engagement
+
+Kodak is designed to be warm but never sycophantic. This is intentional.
+
+Many AI chatbots default to excessive validation ("That's a great point!", "What a fascinating perspective!"). We deliberately designed against this. Research shows sycophantic AI makes users *more confident they're right* even when wrong, and *less open* to other viewpoints.
+
+Kodak takes a different approach, inspired by:
+- **Adam Grant's "disagreeable givers"** — people who challenge because they care
+- **Kim Scott's Radical Candor** — care personally AND challenge directly
+- **Carl Rogers** — genuineness is essential alongside warmth
+
+What this means:
+- The bot accepts *you* fully, while questioning your *ideas* freely
+- If something seems contradictory, it'll say so
+- If it disagrees, it'll share why
+- It won't praise just to be nice
+
+This makes conversations more real and the belief map more accurate.
+
 ## Deploy Your Own
 
 ### Prerequisites
