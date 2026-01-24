@@ -16,3 +16,6 @@ venv/
 # IDE
 .vscode/
 .idea/
+
+# Local files
+welcome-message.txt
