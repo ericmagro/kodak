@@ -19,3 +19,9 @@ venv/
 
 # Local overrides
 welcome-message.txt
+
+# Archived v1 documentation (kept locally for reference)
+DESIGN-v1.md
+COMPARISON-v1.md
+AUDIT.md
+IMPLEMENTATION-PLAN.md

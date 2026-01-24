@@ -111,22 +111,26 @@ Your beliefs are tagged with relevant values, and over time Kodak builds a profi
 
 ## Run Your Own
 
-Kodak is designed to run locally on your computer. Your data stays on your machine.
+Two options:
 
-**You'll need:**
-- Python 3.12+
-- A Discord bot token (free)
-- An Anthropic API key (~$0.01-0.02 per message)
+### Railway (Recommended)
+Deploy to Railway for always-on hosting (~$5/month):
+1. Fork this repo
+2. Connect to Railway
+3. Add a volume mounted at `/data`
+4. Set environment variables: `DISCORD_TOKEN`, `ANTHROPIC_API_KEY`, `KODAK_DB_PATH=/data/kodak.db`
 
-**Quick start:**
+### Local
+Run on your own computer (free, but only works while running):
+
 ```bash
-git clone https://github.com/yourusername/kodak.git
+git clone https://github.com/ericmagro/kodak.git
 cd kodak
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your tokens
-python src/bot.py
+cd src && python bot.py
 ```
 
 **[Full setup guide →](SETUP.md)**
