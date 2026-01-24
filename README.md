@@ -47,6 +47,7 @@ Use `/explore [topic]` to dive deeper into any topic, or `/beliefs` to see the r
 | `/map` | View your belief map |
 | `/explore [topic]` | Dive into beliefs about a topic |
 | `/beliefs` | Raw list with IDs |
+| `/belief [id]` | View one belief with its connections |
 | `/setup` | Choose a personality preset |
 | `/style` | Fine-tune personality (warmth, playfulness, etc.) |
 | `/forget [id]` | Delete a belief (use `last` for most recent) |
@@ -118,10 +119,23 @@ Kodak uses the Anthropic API for:
 
 Rough estimate: ~$0.01-0.02 per conversation turn using Claude Sonnet.
 
+## How to Use
+
+**DMs (recommended for belief mapping):**
+- Just DM the bot directly
+- Private conversations, better for deep exploration
+- Your beliefs stay completely private
+
+**Channels:**
+- @mention the bot to chat
+- Good for casual group discussions
+- Beliefs are still extracted per-user
+
 ## Privacy
 
 - All belief data is stored per-user
 - Only you can see your beliefs (commands are ephemeral)
+- Command responses disappear after a while (use `/export` to save)
 - Use `/pause` to chat without tracking
 - Use `/export` to download your data
 - Use `/clear` to delete everything
