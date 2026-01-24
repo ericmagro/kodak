@@ -138,8 +138,8 @@ The bot accepts you fully while questioning your ideas freely. No empty validati
 ### 5. Surface Patterns as Curiosities
 "I noticed you've mentioned your sister three times this week"—observation, not judgment.
 
-### 6. Privacy First
-All data stays on your machine (or your Railway instance). Nothing is shared unless you explicitly export it.
+### 6. Privacy by Default
+All data is stored locally (or on your Railway instance). Conversations are sent to Anthropic's Claude API for processing—see their [privacy policy](https://www.anthropic.com/privacy). Nothing is shared with other users unless you explicitly export it.
 
 ---
 

@@ -43,7 +43,7 @@ Your bot is now running 24/7. Railway will restart it automatically if it crashe
 
 ## Option 2: Local (Your Computer)
 
-Run Kodak on your own machine. Your data stays completely local.
+Run Kodak on your own machine. Your data is stored locally (conversations are sent to Anthropic's API for processing).
 
 ## What You'll Need
 
@@ -199,7 +199,7 @@ Your bot is now online!
 3. Click on the bot's name → Click **"Message"**
 4. This opens a DM — just say hi!
 
-The bot will guide you through a quick setup, then you can start chatting. Your conversations and beliefs are stored locally in `kodak.db` on your computer.
+The bot will guide you through a quick setup, then you can start chatting. Your beliefs and data are stored locally in `kodak.db`.
 
 ## Keeping It Running
 
@@ -443,7 +443,7 @@ Everything is stored locally in `kodak.db` (SQLite database).
 - **Delete everything:** Use `/clear` in Discord, or just delete `kodak.db`
 - **Backup:** Copy `kodak.db` somewhere safe
 
-Your beliefs never leave your computer.
+Your stored data never leaves your computer (though conversations are processed via Anthropic's API).
 
 ## Questions?
 

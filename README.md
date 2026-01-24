@@ -44,9 +44,10 @@ Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief 
 | **Value comparison** | Share your profile to see how you align with others |
 | **Personality presets** | Choose your conversational style (philosopher, therapist, trickster, etc.) |
 
-## Privacy First
+## Privacy
 
-- All data stored locally—journal entries never leave your machine
+- **Stored locally** — All your data lives in a local SQLite database you control
+- **Processed by Anthropic** — Conversations are sent to Claude for responses (see [Anthropic's privacy policy](https://www.anthropic.com/privacy))
 - `/export` to download everything as JSON
 - `/clear` to delete all your data
 - `/pause` to chat without belief tracking
