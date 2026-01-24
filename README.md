@@ -140,6 +140,11 @@ Rough estimate: ~$0.01-0.02 per conversation turn using Claude Sonnet.
 - Use `/export` to download your data
 - Use `/clear` to delete everything
 
+**Want full control?** Run your own instance:
+- Fork the repo, deploy with your own API keys
+- Your data stays on your own infrastructure
+- Nobody else can access it
+
 ## License
 
 MIT
