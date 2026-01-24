@@ -17,5 +17,5 @@ venv/
 .vscode/
 .idea/
 
-# Local overrides (create these locally if needed)
-# welcome-message.txt
+# Local overrides
+welcome-message.txt
