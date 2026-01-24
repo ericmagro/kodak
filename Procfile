@@ -1,1 +1,1 @@
-worker: python src/bot.py
+worker: cd src && python bot.py

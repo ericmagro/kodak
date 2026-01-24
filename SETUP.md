@@ -1,6 +1,49 @@
-# Self-Hosting Kodak
+# Hosting Kodak
 
-This guide walks you through running Kodak on your own computer. Your data stays completely local.
+Two options for running Kodak:
+
+1. **Railway (Recommended)** — Cloud hosting, always on, ~$5/month
+2. **Local** — Run on your own computer, completely free
+
+---
+
+## Option 1: Railway (Cloud)
+
+Railway keeps your bot running 24/7 without keeping your computer on.
+
+### Prerequisites
+- A Discord Bot Token ([setup instructions](#step-2-create-your-discord-bot))
+- An Anthropic API Key ([setup instructions](#step-3-get-your-anthropic-api-key))
+- A Railway account ([railway.app](https://railway.app))
+
+### Deploy to Railway
+
+1. **Create project:** New Project → Deploy from GitHub → Select your fork of `kodak`
+
+2. **Add a volume** (for persistent database):
+   - Click "New" → "Volume"
+   - Mount path: `/data`
+
+3. **Set environment variables** (Settings → Variables):
+   ```
+   DISCORD_TOKEN=your_discord_bot_token
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   KODAK_DB_PATH=/data/kodak.db
+   ```
+
+4. **Deploy** — Railway auto-deploys from your repo
+
+5. **Verify** — Check logs for "Logged in as Kodak#1234"
+
+Your bot is now running 24/7. Railway will restart it automatically if it crashes.
+
+**Cost:** ~$5/month for the hobby plan (includes enough hours for a Discord bot).
+
+---
+
+## Option 2: Local (Your Computer)
+
+Run Kodak on your own machine. Your data stays completely local.
 
 ## What You'll Need
 
