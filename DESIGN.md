@@ -227,6 +227,38 @@ UserPersonality {
 
 ---
 
+## Roadmap
+
+### Now (v0.1 - Friends Launch)
+- [x] Core bot functionality
+- [x] Onboarding flow
+- [x] Belief extraction
+- [x] Privacy controls
+- [x] README documentation
+- [ ] **Store and display belief relations** (shows WHY/connections)
+- [ ] **Atomic belief breakdown** (split compound beliefs)
+- [ ] Verify multi-user DMs work
+
+### Next (v0.2)
+- [ ] Belief evolution tracking (how beliefs change over time)
+- [ ] Rate limiting / usage caps
+- [ ] Belief comparison between users (opt-in)
+- [ ] Better topic clustering
+
+### Later (v0.3+)
+- [ ] Web-based visualization
+- [ ] Export to Obsidian/Roam format
+- [ ] API for external integrations
+- [ ] Self-hosted deployment guide
+
+### Backlog / Ideas
+- [ ] Voice channel support?
+- [ ] Scheduled check-ins ("How do you feel about X now?")
+- [ ] Belief "challenges" (Socratic prompts to test beliefs)
+- [ ] Community belief maps (aggregate, anonymized)
+
+---
+
 ## Open Questions
 
 - How does the bot decide something is a "belief" vs just a statement?

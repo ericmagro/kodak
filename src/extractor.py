@@ -28,6 +28,14 @@ Guidelines:
 - Don't over-extract. Quality over quantity. 0-3 beliefs per message is typical.
 - If there are no beliefs in the message, return an empty array.
 
+IMPORTANT - Keep beliefs ATOMIC (single ideas):
+- BAD: "Deep understanding of both the field and people is necessary for high-leverage work"
+- GOOD: Split into two beliefs:
+  1. "Deep technical knowledge is necessary for high-leverage work"
+  2. "Understanding the people in a field is necessary for high-leverage work"
+- Each belief should express ONE clear idea, not multiple ideas joined together
+- Compound beliefs with "and", "both", "as well as" should usually be split
+
 Return valid JSON only, no other text:
 {
   "beliefs": [

@@ -15,7 +15,8 @@ from db import (
     soft_delete_belief, add_conversation_message, get_recent_conversation,
     get_all_topics, complete_onboarding, set_tracking_paused,
     increment_message_count, reset_message_count, get_recent_beliefs,
-    clear_all_user_data, export_user_data
+    clear_all_user_data, export_user_data, add_belief_relation,
+    get_belief_relations
 )
 from extractor import extract_beliefs, generate_response, find_belief_relations, summarize_beliefs
 from personality import (
@@ -297,9 +298,15 @@ async def on_message(message: discord.Message):
                 )
                 new_beliefs.append(new_belief)
 
-                # Find relations to existing beliefs
+                # Find and store relations to existing beliefs
                 relations = await find_belief_relations(new_belief, existing_beliefs)
-                # TODO: Store relations
+                for rel in relations:
+                    await add_belief_relation(
+                        source_id=new_belief["id"],
+                        target_id=rel["target_id"],
+                        relation_type=rel["relation_type"],
+                        strength=rel.get("strength", 0.5)
+                    )
 
         # Send response
         await message.reply(response, mention_author=False)
@@ -397,7 +404,8 @@ async def help_command(interaction: discord.Interaction):
         value=(
             "`/map` — See your belief map summarized\n"
             "`/explore [topic]` — Dive into beliefs about something\n"
-            "`/beliefs` — Raw list with IDs"
+            "`/beliefs` — Raw list with IDs\n"
+            "`/belief [id]` — View one belief with connections"
         ),
         inline=False
     )
@@ -554,8 +562,69 @@ async def beliefs_command(interaction: discord.Interaction):
     if len(beliefs) > 20:
         response += f"\n\n*...and {len(beliefs) - 20} more*"
 
+    response += f"\n\n*Use `/belief [id]` to see connections and details.*"
+
     if len(response) > 2000:
         response = response[:1997] + "..."
+
+    await interaction.followup.send(response, ephemeral=True)
+
+
+@bot.tree.command(name="belief", description="View a single belief in detail")
+@app_commands.describe(belief_id="The belief ID (first 8 characters)")
+async def belief_command(interaction: discord.Interaction, belief_id: str):
+    """View a single belief with its relations."""
+    await interaction.response.defer(ephemeral=True)
+
+    beliefs = await get_user_beliefs(str(interaction.user.id))
+    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
+
+    if not matching:
+        await interaction.followup.send(
+            f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
+            ephemeral=True
+        )
+        return
+
+    if len(matching) > 1:
+        await interaction.followup.send(
+            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
+            ephemeral=True
+        )
+        return
+
+    belief = matching[0]
+    relations = await get_belief_relations(belief["id"])
+
+    # Build response
+    conf = "●" * int(belief.get('confidence', 0.5) * 5) + "○" * (5 - int(belief.get('confidence', 0.5) * 5))
+    topics = ", ".join(belief.get("topics", [])) or "none"
+
+    response = f"**Belief:** {belief['statement']}\n\n"
+    response += f"**Confidence:** [{conf}] ({int(belief.get('confidence', 0.5) * 100)}%)\n"
+    response += f"**Source:** {belief.get('source_type', 'unknown')}\n"
+    response += f"**Topics:** {topics}\n"
+    response += f"**ID:** `{belief['id'][:8]}`\n"
+
+    if relations:
+        response += f"\n**Connections:**\n"
+        relation_labels = {
+            "supports": "⬆️ Supports",
+            "contradicts": "⚡ Contradicts",
+            "assumes": "📌 Assumes",
+            "derives_from": "➡️ Derives from",
+            "relates_to": "🔗 Related to"
+        }
+        for rel in relations:
+            label = relation_labels.get(rel["relation_type"], rel["relation_type"])
+            target_stmt = rel.get("target_statement", "")[:60]
+            if len(rel.get("target_statement", "")) > 60:
+                target_stmt += "..."
+            response += f"{label}: *{target_stmt}*\n"
+    else:
+        response += f"\n*No connections to other beliefs yet.*"
+
+    response += f"\n\nUse `/forget {belief['id'][:8]}` to remove this belief."
 
     await interaction.followup.send(response, ephemeral=True)
 
