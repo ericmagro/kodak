@@ -1,0 +1,25 @@
+Welcome to Kodak
+
+Kodak is a reflective journaling companion. Each day at a time you choose, it checks in with a thoughtful prompt. Through conversation, it helps you explore what's on your mind — and over time, surfaces patterns in what you value.
+
+How it works:
+1. DM @Kodak to get started (it'll ask a few setup questions)
+2. Pick a daily check-in time (evenings work well for most)
+3. When prompted, just chat naturally about your day
+4. Kodak extracts beliefs and maps them to your core values
+
+Your values are derived using Schwartz's 10 Basic Human Values — a research-backed framework for understanding what drives people. Over weeks and months, you'll see how your priorities shift.
+
+Key commands:
+- /journal — Start a session right now
+- /schedule — Change your check-in time
+- /values — See your value profile
+- /map — See your beliefs by topic
+- /share-values — Export to compare with others
+- /help — See all commands
+
+Sessions adapt to you. Share a lot and Kodak will explore deeper. Keep it brief and it wraps up quickly.
+
+Kodak is designed to be a genuine companion, not a sycophant. It'll engage honestly, notice contradictions, and sometimes disagree. That's intentional.
+
+All your data stays on your device. Use /export anytime to download everything.

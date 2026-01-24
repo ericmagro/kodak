@@ -245,8 +245,9 @@ class OnboardingFlow:
         welcome = (
             "Hey! I'm Kodak.\n\n"
             "I'm a journaling companion. Each day at a time you choose, "
-            "I'll check in and help you reflect.\n\n"
-            "Over time, I'll help you see patterns in what you believe and value.\n\n"
+            "I'll check in with a prompt to help you reflect.\n\n"
+            "Over time, I'll surface your core values and how they shift — "
+            "you can even compare with friends to see how you align.\n\n"
             "Everything stays private on your device.\n\n"
             "**First — how would you like me to show up?**"
         )
