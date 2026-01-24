@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS beliefs (
     user_id TEXT NOT NULL,               -- Discord user ID
     statement TEXT NOT NULL,             -- The belief itself
     confidence REAL DEFAULT 0.5,         -- 0.0 - 1.0
+    importance INTEGER DEFAULT 3,        -- 1-5 scale (1=peripheral, 5=core)
     source_type TEXT,                    -- experience | reasoning | authority | intuition | inherited
     context TEXT,                        -- What prompted this belief to surface
     first_expressed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS beliefs (
     message_id TEXT,                     -- Discord message ID where first expressed
     channel_id TEXT,                     -- Discord channel ID
     is_deleted INTEGER DEFAULT 0,        -- Soft delete for /forget
+    visibility TEXT DEFAULT 'shareable', -- public | shareable | private | hidden
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 

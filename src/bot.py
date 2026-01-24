@@ -18,7 +18,7 @@ from db import (
     get_all_topics, complete_onboarding, set_tracking_paused,
     increment_message_count, reset_message_count, get_recent_beliefs,
     clear_all_user_data, export_user_data, add_belief_relation,
-    get_belief_relations
+    get_belief_relations, set_belief_importance, get_beliefs_by_importance
 )
 from extractor import extract_beliefs, generate_response, find_belief_relations, summarize_beliefs
 from personality import (
@@ -451,8 +451,18 @@ async def help_command(interaction: discord.Interaction):
         value=(
             "`/map` — See your belief map summarized\n"
             "`/explore [topic]` — Dive into beliefs about something\n"
-            "`/beliefs` — Raw list with IDs\n"
-            "`/belief [id]` — View one belief with connections"
+            "`/beliefs` — Raw list with IDs and importance\n"
+            "`/belief [id]` — View one belief with connections\n"
+            "`/core` — Show only your most important beliefs"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⭐ Importance",
+        value=(
+            "`/mark [id] [1-5]` — Set how important a belief is\n"
+            "*1=peripheral, 3=medium, 5=core to who you are*"
         ),
         inline=False
     )
@@ -595,21 +605,25 @@ async def beliefs_command(interaction: discord.Interaction):
         await interaction.followup.send("No beliefs mapped yet.", ephemeral=True)
         return
 
+    def importance_stars(level):
+        return "★" * level + "☆" * (5 - level)
+
     lines = []
-    for b in beliefs[:20]:  # Reduced to fit more content per belief
+    for b in beliefs[:20]:
         conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
+        imp = importance_stars(b.get('importance', 3))
         topics = ", ".join(b.get("topics", []))
         topic_str = f" *({topics})*" if topics else ""
-        lines.append(f"`{b['id'][:8]}` [{conf}] {b['statement']}{topic_str}")
+        lines.append(f"`{b['id'][:8]}` {imp} [{conf}] {b['statement']}{topic_str}")
 
     response = "**Your Beliefs:**\n"
-    response += "*Confidence: ●=certain, ○=uncertain*\n\n"
-    response += "\n\n".join(lines)  # Double newline for readability
+    response += "*★=importance, ●=confidence*\n\n"
+    response += "\n\n".join(lines)
 
     if len(beliefs) > 20:
         response += f"\n\n*...and {len(beliefs) - 20} more*"
 
-    response += f"\n\n*Use `/belief [id]` to see connections and details.*"
+    response += f"\n\n*Use `/mark [id] [1-5]` to set importance. `/core` for important beliefs only.*"
 
     if len(response) > 2000:
         response = response[:1997] + "..."
@@ -717,6 +731,91 @@ async def forget_command(interaction: discord.Interaction, belief_id: str):
         )
     else:
         await interaction.followup.send("Hmm, couldn't delete that one.", ephemeral=True)
+
+
+@bot.tree.command(name="mark", description="Set how important a belief is to you")
+@app_commands.describe(
+    belief_id="The belief ID (first 8 characters)",
+    importance="1 (peripheral) to 5 (core)"
+)
+async def mark_command(interaction: discord.Interaction, belief_id: str, importance: int):
+    """Mark a belief's importance level."""
+    if importance < 1 or importance > 5:
+        await interaction.response.send_message(
+            "Importance must be between 1 and 5.",
+            ephemeral=True
+        )
+        return
+
+    beliefs = await get_user_beliefs(str(interaction.user.id))
+    matching = [b for b in beliefs if b["id"].startswith(belief_id)]
+
+    if not matching:
+        await interaction.response.send_message(
+            f"No belief found starting with `{belief_id}`. Use `/beliefs` to see IDs.",
+            ephemeral=True
+        )
+        return
+
+    if len(matching) > 1:
+        await interaction.response.send_message(
+            f"Multiple beliefs match `{belief_id}`. Please be more specific.",
+            ephemeral=True
+        )
+        return
+
+    belief = matching[0]
+    success = await set_belief_importance(belief["id"], str(interaction.user.id), importance)
+
+    if success:
+        importance_labels = {
+            1: "Peripheral — passing thought",
+            2: "Low — hold loosely",
+            3: "Medium — significant but flexible",
+            4: "High — very important",
+            5: "Core — foundational to who you are"
+        }
+        stars = "★" * importance + "☆" * (5 - importance)
+        await interaction.response.send_message(
+            f"Marked as **{importance_labels[importance]}** ({stars}):\n"
+            f"*{belief['statement']}*",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message("Couldn't update that belief.", ephemeral=True)
+
+
+@bot.tree.command(name="core", description="Show only your most important beliefs")
+async def core_command(interaction: discord.Interaction):
+    """Show beliefs marked as high importance (4-5)."""
+    await interaction.response.defer(ephemeral=True)
+
+    beliefs = await get_beliefs_by_importance(str(interaction.user.id), min_importance=4)
+
+    if not beliefs:
+        await interaction.followup.send(
+            "No core beliefs marked yet.\n"
+            "Use `/mark [id] 4` or `/mark [id] 5` to mark important beliefs.",
+            ephemeral=True
+        )
+        return
+
+    def importance_stars(level):
+        return "★" * level + "☆" * (5 - level)
+
+    lines = []
+    for b in beliefs[:15]:
+        conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
+        imp = importance_stars(b.get('importance', 3))
+        lines.append(f"{imp} [{conf}] {b['statement']}")
+
+    response = "**Your Core Beliefs (★★★★+):**\n\n"
+    response += "\n\n".join(lines)
+
+    if len(beliefs) > 15:
+        response += f"\n\n*...and {len(beliefs) - 15} more*"
+
+    await interaction.followup.send(response, ephemeral=True)
 
 
 @bot.tree.command(name="pause", description="Pause belief tracking")

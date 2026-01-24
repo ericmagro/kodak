@@ -365,6 +365,42 @@ async def soft_delete_belief(belief_id: str, user_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+async def set_belief_importance(belief_id: str, user_id: str, importance: int) -> bool:
+    """Set the importance level of a belief (1-5)."""
+    if importance < 1 or importance > 5:
+        return False
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE beliefs SET importance = ? WHERE id = ? AND user_id = ? AND is_deleted = 0",
+            (importance, belief_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_beliefs_by_importance(user_id: str, min_importance: int = 4) -> list[dict]:
+    """Get beliefs at or above a certain importance level."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT b.*, GROUP_CONCAT(bt.topic) as topics
+               FROM beliefs b
+               LEFT JOIN belief_topics bt ON b.id = bt.belief_id
+               WHERE b.user_id = ? AND b.is_deleted = 0 AND b.importance >= ?
+               GROUP BY b.id
+               ORDER BY b.importance DESC, b.last_referenced DESC""",
+            (user_id, min_importance)
+        )
+        rows = await cursor.fetchall()
+        beliefs = []
+        for row in rows:
+            belief = dict(row)
+            belief['topics'] = belief['topics'].split(',') if belief['topics'] else []
+            beliefs.append(belief)
+        return beliefs
+
+
 async def add_conversation_message(
     user_id: str,
     role: str,
