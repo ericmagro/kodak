@@ -1610,15 +1610,16 @@ async def compare_command(interaction: discord.Interaction, user: discord.User):
     try:
         embed = discord.Embed(
             title="🔄 Belief Comparison Request",
-            description=f"**{interaction.user.display_name}** wants to compare belief maps with you.\n\n"
-                       f"This will show:\n"
+            description=f"*Kodak maps what you believe through conversation.*\n\n"
+                       f"**{interaction.user.display_name}** wants to compare belief maps with you.\n\n"
+                       f"If you accept, you'll both see:\n"
                        f"• Where you agree\n"
                        f"• Where you differ\n"
-                       f"• Your similarity score\n\n"
-                       f"Only beliefs you've marked as 'shareable' will be visible.",
+                       f"• A similarity score\n\n"
+                       f"Only beliefs marked 'shareable' are visible (use `/privacy` to control this).",
             color=discord.Color.blue()
         )
-        embed.set_footer(text="You can change what's shareable with /privacy")
+        embed.set_footer(text="New to Kodak? Just DM me to start mapping your beliefs.")
 
         view = ComparisonRequestView(
             result["id"],

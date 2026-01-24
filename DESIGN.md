@@ -456,7 +456,7 @@ Known issues to fix:
 - [ ] **In-place belief editing** — Allow updating a belief statement without delete/re-add
 - [ ] **Chunked summarization** — Handle users with 200+ beliefs without exceeding context limits
 - [ ] **Comparison race condition** — Prevent double-execution if two users accept simultaneously
-- [ ] **Richer comparison request DMs** — Explain what Kodak is to recipients who may not know the bot
+- [x] **Richer comparison request DMs** — Explain what Kodak is to recipients who may not know the bot
 
 ---
 
