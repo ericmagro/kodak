@@ -1,35 +1,73 @@
 # Kodak Roadmap
 
-Ideas for future development, roughly prioritized.
+A living document of where Kodak is going.
+
+**See also:**
+- [VISION.md](VISION.md) — The bigger picture: decentralized compatibility matching
+- [VALUES-SYSTEM-AUDIT.md](VALUES-SYSTEM-AUDIT.md) — Technical audit of the values system
 
 ---
 
-## Summaries & Reflection
+## Recently Completed
 
-### Weekly/Monthly Summaries
-Automatic digests of your journaling activity:
-- Topics you reflected on most
-- Beliefs that emerged or evolved
-- Value shifts detected
-- Patterns noticed ("You mentioned work stress 6 times this month")
+- [x] Weekly summaries (`/summary week`)
+- [x] Past summaries viewing (`/summaries`)
+- [x] Value snapshots for tracking change over time
+- [x] File-based value comparison (`/share-values`, `/compare-file`)
 
-Could be sent automatically or triggered with `/summary week` or `/summary month`.
+---
+
+## Near-Term: Values System Fixes
+
+These address critical issues identified in the [values system audit](VALUES-SYSTEM-AUDIT.md).
+
+### Fix Normalization (Critical)
+Current max-value normalization loses magnitude information, making comparisons less meaningful.
+
+- [ ] Switch to sum-normalization or z-scores
+- [ ] Add "values intensity" metric (how values-driven overall)
+- [ ] Compare on both priority structure AND intensity
+
+### Add Uncertainty Display (Critical)
+System shows false precision. Users need to understand confidence levels.
+
+- [ ] Show confidence bounds on profiles
+- [ ] Frame early profiles as "emerging themes"
+- [ ] Require minimum beliefs (~30) for comparisons
+- [ ] Visual indication of profile maturity
+
+### Enable User Corrections (High)
+Let users fix misclassified values—improves accuracy and builds training data.
+
+- [ ] "This belief was tagged wrong" feedback
+- [ ] Track correction rate as quality signal
+- [ ] Use corrections to improve extraction over time
+
+### Extraction Validation (High)
+We don't know how reliable the LLM extraction is.
+
+- [ ] Build validation dataset (100-200 human-labeled beliefs)
+- [ ] Measure test-retest reliability
+- [ ] Measure inter-prompt reliability
+
+---
+
+## Near-Term: Features
+
+### Monthly Summaries
+Extend weekly summaries to monthly cadence.
+
+- [ ] Longer-term pattern detection
+- [ ] Value change narratives across weeks
+- [ ] Comparison to previous months
 
 ### Year-End Summary
-A comprehensive annual reflection:
-- **Accomplishments & milestones** mentioned throughout the year
-- **Major belief changes** — what you thought in January vs December
-- **Value evolution** — how your priorities shifted
-- **Themes** — what dominated your reflections (career, relationships, health, etc.)
-- **Patterns** — recurring concerns, breakthroughs, cycles
-- **Growth moments** — times you updated a belief or resolved a tension
-- **Stats** — sessions completed, beliefs extracted, most active months
-
-Delivered around late December or on-demand with `/summary year`.
-
----
-
-## Pattern Recognition
+Comprehensive annual reflection:
+- Accomplishments & milestones mentioned
+- Major belief changes (January vs December)
+- Value evolution across the year
+- Themes, patterns, growth moments
+- Stats (sessions, beliefs, most active months)
 
 ### Longer-Term Pattern Surfacing
 Proactive prompts that reference the past:
@@ -37,20 +75,58 @@ Proactive prompts that reference the past:
 - "You've mentioned feeling stuck at work three times this month"
 - "Last year around this time you were dealing with Y"
 
-Requires: tracking seasonal patterns, belief timestamps, theme detection.
-
 ### Tension Resolution
-When contradictory beliefs are detected, offer guided exploration:
+When contradictory beliefs are detected:
 - Surface the tension explicitly
-- Ask which feels more true
-- Explore the nuance (maybe both are true in different contexts)
-- Optionally update or retire one belief
+- Guided exploration of which feels more true
+- Option to update or retire one belief
 
-### Value Drift Alerts
-Notify when values shift significantly:
-- "Your Security score dropped 20% this month"
-- "Achievement has become your top value (was #4 last month)"
-- Could be opt-in to avoid being annoying
+---
+
+## Medium-Term: Comparison & Compatibility
+
+### Improved Comparison
+- [ ] Weight dimensions differently for different relationship types
+- [ ] Add complementarity analysis (productive differences)
+- [ ] Show "questions to explore together" based on differences
+- [ ] Comparison history — track alignment over time
+
+### Portable Compatibility Profiles
+Standardized format for sharing value profiles outside Kodak.
+
+- [ ] Generate shareable "Compatibility Profile" document
+- [ ] Side-by-side comparison with detailed explanations
+- [ ] Frame as conversation starters, not scores
+
+### Relationship Type Matching
+Different weighting for:
+- Romantic relationships (attachment, life goals, conflict style)
+- Co-founder relationships (complementary skills, aligned ethics)
+- Friendships (shared interests, benevolence alignment)
+
+---
+
+## Long-Term: Decentralized Matching
+
+See [VISION.md](VISION.md) for full details.
+
+### Phase 1: Comparison Tool
+No network effects needed—useful for pairs.
+- Compare with known relationships (partner, potential co-founder, friend)
+- Export shareable profiles
+- Frame as "questions to explore together"
+
+### Phase 2: Opt-in Discovery
+- Publish blurred profile (Schwartz values only) to optional relay
+- Browse/search others who've opted in
+- Mutual consent required to reveal details
+- Single relay to start
+
+### Phase 3: Protocol Layer
+- Standardize profile format for interoperability
+- Multiple relays (federated)
+- Reputation/verification options
+- Consider DAO governance
 
 ---
 
@@ -58,76 +134,15 @@ Notify when values shift significantly:
 
 ### Web Visualization
 Interactive graph of beliefs and values:
-- Nodes = beliefs, edges = relationships (supports, contradicts, relates)
+- Nodes = beliefs, edges = relationships
 - Color-coded by value or topic
-- Click to explore
 - Filter by time period, confidence, importance
-
-Could be a simple static site generated from `/export` data, or a hosted dashboard.
 
 ### Obsidian Export
 Export belief network to markdown:
 - One file per belief with YAML frontmatter
 - Wikilinks between related beliefs
-- Value tags
-- Ready to drop into an Obsidian vault
-
-### Mobile-Friendly Export
-PDF or image summaries for sharing:
-- Value profile as a shareable graphic
-- "My 2026 in reflection" year-end card
-- Comparison results as an image
-
----
-
-## Social & Community
-
-### Group Insights
-Aggregate value profiles across users (opt-in):
-- "What does this Discord server actually value?"
-- Anonymous aggregation — no individual data exposed
-- Could surface: shared values, value diversity, outliers
-
-### Enhanced Comparison
-Beyond the current file-based comparison:
-- Direct user-to-user comparison (with consent)
-- Comparison history — track alignment over time
-- "Find someone who..." — match based on value similarity or interesting differences
-
----
-
-## Customization
-
-### Prompt Customization
-Let users influence the opener prompts:
-- Add custom prompts to the rotation
-- Weight certain prompt types (more work-focused, more relationship-focused)
-- "Never ask me about X"
-
-### Session Preferences
-More granular control:
-- Preferred session length (not just quick/standard/deep)
-- Topics to focus on or avoid
-- Extraction sensitivity (more/fewer beliefs per session)
-
----
-
-## Technical Improvements
-
-### Smarter Scheduling
-- Multiple check-in times per day (morning + evening)
-- Day-of-week preferences (skip weekends, or weekends only)
-- Vacation mode with return date
-
-### Better Catch-Up
-When you miss several days:
-- Option to do a "week in review" session
-- Batch catch-up: "Anything notable from the last few days?"
-
-### Conversation Memory
-Reference past sessions more intelligently:
-- "Last time we talked about your job interview. How did that go?"
-- Requires: session summarization, topic threading
+- Ready for Obsidian vault
 
 ---
 
@@ -135,12 +150,13 @@ Reference past sessions more intelligently:
 
 Lower priority or needs more thought:
 
-- **Voice input** — Speak instead of type (Discord voice? External?)
-- **Mood tracking** — Infer or ask about mood, correlate with beliefs
+- **Voice input** — Speak instead of type
+- **Mood tracking** — Correlate mood with beliefs
 - **Goal tracking** — Set goals, check in on progress
-- **Shared journals** — Couples or close friends journaling together
+- **Shared journals** — Couples or friends journaling together
 - **API access** — Let users build on top of their data
-- **Integrations** — Calendar (what happened today), Spotify (what you listened to), etc.
+- **Group insights** — "What does this Discord server value?"
+- **Integrations** — Calendar, Spotify, etc.
 
 ---
 
