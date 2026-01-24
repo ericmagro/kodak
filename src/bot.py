@@ -468,6 +468,16 @@ async def help_command(interaction: discord.Interaction):
     )
 
     embed.add_field(
+        name="📤 Share",
+        value=(
+            "`/share` — Create shareable snapshot of your beliefs\n"
+            "`/share topic:[topic]` — Share beliefs about a topic\n"
+            "`/share core_only:True` — Share only important beliefs"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
         name="🎭 Customize Me",
         value=(
             "`/setup` — Choose a personality preset\n"
@@ -816,6 +826,95 @@ async def core_command(interaction: discord.Interaction):
         response += f"\n\n*...and {len(beliefs) - 15} more*"
 
     await interaction.followup.send(response, ephemeral=True)
+
+
+@bot.tree.command(name="share", description="Create a shareable snapshot of your beliefs")
+@app_commands.describe(
+    topic="Share beliefs about a specific topic (optional)",
+    core_only="Only share important beliefs (4-5 stars)"
+)
+async def share_command(
+    interaction: discord.Interaction,
+    topic: str = None,
+    core_only: bool = False
+):
+    """Generate a shareable belief snapshot."""
+    await interaction.response.defer(ephemeral=True)
+
+    if topic:
+        beliefs = await get_beliefs_by_topic(str(interaction.user.id), topic)
+        title = f"Beliefs: {topic.upper()}"
+    elif core_only:
+        beliefs = await get_beliefs_by_importance(str(interaction.user.id), min_importance=4)
+        title = "Core Beliefs"
+    else:
+        beliefs = await get_user_beliefs(str(interaction.user.id))
+        title = "Belief Snapshot"
+
+    if not beliefs:
+        await interaction.followup.send(
+            "No beliefs to share." + (" Try a different topic." if topic else ""),
+            ephemeral=True
+        )
+        return
+
+    def importance_stars(level):
+        return "★" * level + "☆" * (5 - level)
+
+    # Build the shareable embed
+    embed = discord.Embed(
+        title=f"🧠 {interaction.user.display_name}'s {title}",
+        color=discord.Color.blue()
+    )
+
+    # Group by topic if not filtering by topic
+    if not topic and len(beliefs) > 5:
+        # Show top beliefs by importance
+        sorted_beliefs = sorted(beliefs, key=lambda b: b.get('importance', 3), reverse=True)[:8]
+        belief_lines = []
+        for b in sorted_beliefs:
+            imp = importance_stars(b.get('importance', 3))
+            conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
+            statement = b['statement'][:80] + "..." if len(b['statement']) > 80 else b['statement']
+            belief_lines.append(f"{imp} [{conf}] {statement}")
+        embed.description = "\n".join(belief_lines)
+        if len(beliefs) > 8:
+            embed.set_footer(text=f"Showing top 8 of {len(beliefs)} beliefs")
+    else:
+        belief_lines = []
+        for b in beliefs[:10]:
+            imp = importance_stars(b.get('importance', 3))
+            conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
+            statement = b['statement'][:80] + "..." if len(b['statement']) > 80 else b['statement']
+            belief_lines.append(f"{imp} [{conf}] {statement}")
+        embed.description = "\n".join(belief_lines)
+        if len(beliefs) > 10:
+            embed.set_footer(text=f"Showing 10 of {len(beliefs)} beliefs")
+
+    # Also create text version for copying
+    text_version = f"**{interaction.user.display_name}'s {title}**\n"
+    text_version += "```\n"
+    for b in (beliefs[:10] if len(beliefs) > 10 else beliefs):
+        imp = importance_stars(b.get('importance', 3))
+        conf = "●" * int(b.get('confidence', 0.5) * 5) + "○" * (5 - int(b.get('confidence', 0.5) * 5))
+        statement = b['statement'][:60] + "..." if len(b['statement']) > 60 else b['statement']
+        text_version += f"{imp} [{conf}] {statement}\n"
+    text_version += "```"
+    text_version += "\n*Mapped with Kodak*"
+
+    # Show preview
+    await interaction.followup.send(
+        "**Preview of your shareable snapshot:**",
+        embed=embed,
+        ephemeral=True
+    )
+
+    # Send text version as copyable
+    await interaction.followup.send(
+        "**Copy-paste version:**\n" + text_version +
+        "\n\n*To post this publicly, copy the text above and paste in any channel.*",
+        ephemeral=True
+    )
 
 
 @bot.tree.command(name="pause", description="Pause belief tracking")
