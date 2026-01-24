@@ -19,10 +19,21 @@ Kodak is designed to be warm but honest — it'll ask real questions and point o
 • `/export` — Download your data
 • `/help` — See all commands (there are more!)
 
-**Coming soon:**
-• Compatibility matching — find people with similar (or interestingly different) beliefs
-• Web visualization — explore your belief map visually
-• Obsidian/Roam export — take your beliefs into your notes app
+**Where this is going:**
+
+Right now Kodak maps *your* beliefs. But the vision is bigger:
+
+*Soon:*
+• **Compatibility matching** — Find people who share your values, or who disagree in interesting ways (not just trolls)
+• **Web visualization** — Your beliefs as an interactive graph you can actually explore
+• **Obsidian export** — Take your belief network into your notes app
+
+*Later:*
+• **Community mapping** — What does a group actually believe? Not just who's loudest.
+• **Bridge-building** — Find beliefs that connect people across divides
+• **Check-ins over time** — "Six months ago you said X. Still feel that way?"
+
+The goal: technology that helps us understand each other, instead of just confirming what we already think.
 
 **Heads up:**
 • 15 messages per hour limit (API costs add up!)

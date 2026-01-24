@@ -151,20 +151,46 @@ Your beliefs never leave your machine.
 
 ## Where This Is Going
 
-Right now, Kodak maps your beliefs through conversation. But the vision is bigger:
+Right now, Kodak is a Discord bot that maps your beliefs through conversation. But that's just the start.
 
-**Coming soon:**
-- **Compatibility matching** — Find people who share your values, or who disagree in interesting ways
-- **Web visualization** — See your beliefs as an interactive graph, not just text
-- **Obsidian/Roam export** — Take your belief network into your second brain
-- **Scheduled check-ins** — Track how your thinking evolves over months and years
+### The Problem
 
-**Longer term:**
-- Community belief mapping — What does a group actually think?
-- Bridge-building tools — Find common ground across divides
-- Deliberation support — Help groups have productive disagreements
+Most technology makes us *more* certain we're right. Algorithms feed us content we already agree with. Social media rewards outrage over understanding. We end up in bubbles, talking past each other.
 
-The goal: technology that helps us understand ourselves and each other, instead of just confirming what we already believe.
+What if technology could do the opposite? What if it could help us actually understand what we believe, why we believe it, and how our thinking connects to (and differs from) others?
+
+### The Vision
+
+**For you personally:**
+- See patterns in your own thinking you couldn't see before
+- Track how your beliefs evolve over years, not just moments
+- Notice your contradictions before someone else points them out
+- Export your belief map to Obsidian/Roam and build on it
+
+**For your relationships:**
+- Actually understand where you and a friend/partner/colleague align and differ
+- Find the few core beliefs causing most of your disagreements
+- Discover unexpected common ground with people you thought were totally different
+
+**For communities:**
+- See what a group *actually* believes, not just who's loudest
+- Find "bridging beliefs" that unite people across divides
+- Have productive disagreements instead of culture war dead-ends
+
+### What's Coming
+
+**Soon:**
+- **Compatibility matching** — Find people who share your values, or who disagree in *interesting* ways (not just trolls)
+- **Web visualization** — See your beliefs as an interactive graph you can explore
+- **Obsidian/Roam export** — Your beliefs as markdown with `[[wiki-links]]`
+
+**Later:**
+- **Community mapping** — What does this server/group actually think?
+- **Bridge-builder tools** — Surface the beliefs that connect people across divides
+- **Scheduled check-ins** — "Six months ago you said X. Still feel that way?"
+- **Steelmanning** — "Here's the strongest case for the opposite of what you believe"
+
+This is a long-term project. Right now it's a bot for personal reflection. But the foundation is designed to grow.
 
 See the full [roadmap and vision](DESIGN.md#roadmap).
 
