@@ -22,4 +22,6 @@ Kodak is designed to be warm but honest — it'll ask real questions and point o
 • All command responses are private
 • Want full control? Run your own instance: https://github.com/ericmagro/kodak
 
+**Note:** Each message costs me real money (API fees), so have good conversations but maybe don't spam it 😅
+
 Questions? Ask in #general
