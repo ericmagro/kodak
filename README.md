@@ -149,14 +149,24 @@ Each message costs ~$0.01-0.02 (Anthropic API). A good conversation session migh
 
 Your beliefs never leave your machine.
 
-## Coming Soon
+## Where This Is Going
 
-- **Compatibility matching** — Find people with similar beliefs, or productive disagreements
-- **Web visualization** — Explore your belief map as an interactive graph
-- **Obsidian/Roam export** — Take your belief network into your notes app
-- **Scheduled check-ins** — "How do you feel about X now?" over time
+Right now, Kodak maps your beliefs through conversation. But the vision is bigger:
 
-See the full [roadmap](DESIGN.md#roadmap).
+**Coming soon:**
+- **Compatibility matching** — Find people who share your values, or who disagree in interesting ways
+- **Web visualization** — See your beliefs as an interactive graph, not just text
+- **Obsidian/Roam export** — Take your belief network into your second brain
+- **Scheduled check-ins** — Track how your thinking evolves over months and years
+
+**Longer term:**
+- Community belief mapping — What does a group actually think?
+- Bridge-building tools — Find common ground across divides
+- Deliberation support — Help groups have productive disagreements
+
+The goal: technology that helps us understand ourselves and each other, instead of just confirming what we already believe.
+
+See the full [roadmap and vision](DESIGN.md#roadmap).
 
 ## License
 

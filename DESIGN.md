@@ -311,6 +311,38 @@ UserPersonality {
 
 ## Roadmap
 
+### Vision: Where This Could Go
+
+Kodak started as a simple idea: what if you could see a map of everything you believe?
+
+But the real potential is bigger:
+
+**For individuals:**
+- A mirror for your mind that reveals patterns you can't see yourself
+- Track how your thinking evolves over years, not just moments
+- Export your belief network to your notes app and build on it
+- Get better at noticing your own contradictions and blind spots
+
+**For relationships:**
+- Actually understand where you and your partner/friend/colleague align and differ
+- Find the 3 beliefs causing 90% of your conflicts
+- Discover unexpected common ground with people you thought you disagreed with
+
+**For communities:**
+- See what a group actually believes (not just who's loudest)
+- Find bridging beliefs that unite people across divides
+- Identify productive disagreements worth exploring vs. dead-end culture wars
+- Build genuine understanding instead of filter bubbles
+
+**For society:**
+- What if we could map belief networks at scale?
+- What if we could identify bridge-builders and amplify them?
+- What if technology helped us understand each other instead of polarize?
+
+This is a long-term vision. Right now, Kodak is a Discord bot for personal reflection. But the foundation—belief extraction, relationship mapping, evolution tracking—could grow into something much more.
+
+---
+
 ### Completed (v0.1 - Friends Launch)
 - [x] Core bot functionality
 - [x] Onboarding flow
@@ -337,21 +369,88 @@ UserPersonality {
 ### Deferred
 - [ ] **Consensus finder** — Surface beliefs that bridge different clusters (needs active community)
 
-### Later (v0.4+ - Advanced Features)
-- [ ] **Compatibility algorithm** — Multi-factor matching (semantic + structural + importance-weighted)
-- [ ] **"Interesting differences" matching** — Suggest productive disagreements, not just similarity
-- [ ] **Community aggregates** — "X% of server believes Y" (anonymized)
-- [ ] **Bridge Builder badges** — Reward productive cross-divide engagement
-- [ ] Web-based visualization
-- [ ] Export to Obsidian/Roam format
+### Later (v0.4 - Compatibility & Matching)
+
+The comparison features in v0.3 show similarity scores, but they're basic. v0.4 makes matching actually useful:
+
+- [ ] **Compatibility algorithm** — Multi-factor matching that considers:
+  - Semantic similarity (do beliefs mean the same thing?)
+  - Structural similarity (are they connected the same way?)
+  - Importance weighting (agreement on core beliefs matters more)
+  - Source type alignment (do you both reason from experience vs. authority?)
+
+- [ ] **"Interesting differences" matching** — Sometimes you don't want someone who agrees with you. You want someone who disagrees in a productive way. This finds people where:
+  - You share enough common ground to communicate
+  - You differ on something substantive and interesting
+  - Neither person holds the belief as core identity (so it's discussable)
+
+- [ ] **Bridge Builder identification** — Some people naturally find common ground across divides. Track and surface:
+  - Who has high bridging scores
+  - Which beliefs tend to bridge different clusters
+  - Reward cross-divide engagement, not just echo-chamber agreement
+
+### Later (v0.5 - Visualization & Export)
+
+Text lists only go so far. Beliefs are a network—they should look like one:
+
+- [ ] **Web-based visualization** — Interactive graph where you can:
+  - See clusters of related beliefs
+  - Zoom into topics
+  - Watch evolution over time (animated)
+  - Compare two people's graphs side-by-side
+
+- [ ] **Export to Obsidian/Roam** — Your beliefs as markdown with `[[wiki-links]]`:
+  - Each belief becomes a note
+  - Relations become links
+  - Topics become tags
+  - Take your belief network into your second brain
+
+### Later (v0.6 - Community Intelligence)
+
+With enough users, aggregate patterns emerge:
+
+- [ ] **Community aggregates** — "X% of this server believes Y" (anonymized, opt-in)
+- [ ] **Consensus finder** — Surface beliefs that bridge different clusters
+- [ ] **Pol.is-style clustering** — Visual map of where the community stands
+- [ ] **Deliberation support** — Help groups find productive disagreements to discuss
 
 ### Backlog / Ideas
-- [ ] Pol.is-style opinion clustering and visualization
-- [ ] Scheduled check-ins ("How do you feel about X now?")
-- [ ] Steelmanned opposing beliefs ("Here's the best case for the other side")
-- [ ] Voice channel support?
 
-### Technical Debt / Improvements (from v0.3 audit)
+Interesting possibilities, not yet prioritized:
+
+- [ ] **Scheduled check-ins** — "Six months ago you said X. Still feel that way?"
+- [ ] **Steelmanned opposing views** — "Here's the best case for the other side of your belief"
+- [ ] **Belief predictions** — "Based on your other beliefs, you might also think..."
+- [ ] **Voice channel support** — Extract beliefs from voice conversations
+- [ ] **Multi-platform** — Telegram, Slack, web interface
+- [ ] **API for developers** — Let others build on belief extraction
+
+### Polish & UX Improvements
+
+Small things that make the experience better:
+
+- [ ] **Better `/map` visualization** — The ASCII art could be more beautiful/readable
+- [ ] **Smoother onboarding** — Fewer steps, less friction
+- [ ] **`/undo` command** — Restore the last forgotten belief (regret happens)
+- [ ] **Topic suggestions** — When `/explore` finds nothing, suggest similar topics
+- [ ] **Richer error messages** — More personality, more helpful
+- [ ] **Conversation memory** — Reference earlier parts of the conversation naturally
+- [ ] **Belief merging** — Combine two beliefs that turned out to be the same
+
+### Developer Experience
+
+For maintainability and contribution:
+
+- [ ] **Test suite** — Unit tests for extraction, database, commands
+- [ ] **Logging** — See what's happening in production (Railway)
+- [ ] **CI/CD pipeline** — Auto-run tests on PR
+- [ ] **Contributing guide** — How to add features, code style, etc.
+- [ ] **API documentation** — For the database and extraction functions
+
+### Technical Debt (from v0.3 audit)
+
+Known issues to fix:
+
 - [ ] **Belief deduplication** — Currently only checks last 30 beliefs; users with 100+ may get duplicates
 - [ ] **Auto-detect contradictions** — Trigger belief evolution when new statement contradicts existing belief
 - [ ] **In-place belief editing** — Allow updating a belief statement without delete/re-add
