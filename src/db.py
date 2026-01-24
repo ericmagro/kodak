@@ -131,6 +131,9 @@ async def get_users_for_prompt(current_time: str) -> list[dict]:
     """
     Get users who should receive a prompt at the given time.
 
+    DEPRECATED: Use get_users_eligible_for_prompt() with timezone-aware filtering.
+    Kept for backwards compatibility.
+
     current_time format: "HH:MM" (24-hour)
     """
     async with aiosqlite.connect(DB_PATH) as db:
@@ -151,6 +154,35 @@ async def get_users_for_prompt(current_time: str) -> list[dict]:
                  AND (last_prompt_sent IS NULL OR last_prompt_sent < ?)
             """,
             (current_time, today)
+        )
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_users_eligible_for_prompt() -> list[dict]:
+    """
+    Get all users who are eligible for a prompt today (haven't been prompted yet).
+
+    Returns users who:
+    - Have completed onboarding
+    - Have tracking enabled (not paused)
+    - Have a prompt_time set
+    - Haven't received a prompt today
+
+    The caller should filter by timezone to determine if it's the right time.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        today = datetime.now().date().isoformat()
+
+        cursor = await db.execute(
+            """SELECT * FROM users
+               WHERE onboarding_complete = 1
+                 AND tracking_paused = 0
+                 AND prompt_time IS NOT NULL
+                 AND (last_prompt_sent IS NULL OR last_prompt_sent < ?)
+            """,
+            (today,)
         )
         return [dict(row) for row in await cursor.fetchall()]
 

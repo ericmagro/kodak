@@ -3,6 +3,7 @@
 import os
 import logging
 import uuid
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,7 +12,7 @@ from datetime import datetime
 
 from db import (
     init_db, get_or_create_user, update_user,
-    get_users_for_prompt, get_users_with_missed_prompts,
+    get_users_eligible_for_prompt, get_users_with_missed_prompts,
     get_users_needing_reengagement, mark_prompt_sent,
     create_session as db_create_session, get_active_session as db_get_active_session,
     end_session as db_end_session, update_session,
@@ -431,7 +432,7 @@ async def on_ready():
 
     # Initialize and start scheduler
     scheduler = JournalScheduler(
-        get_users_for_prompt=get_users_for_prompt,
+        get_users_eligible_for_prompt=get_users_eligible_for_prompt,
         get_users_with_missed_prompts=get_users_with_missed_prompts,
         get_users_needing_reengagement=get_users_needing_reengagement,
         send_scheduled_prompt=send_scheduled_prompt,
@@ -1674,6 +1675,20 @@ async def help_command(interaction: discord.Interaction):
 
 
 # ============================================
+# SHUTDOWN
+# ============================================
+
+@bot.event
+async def on_close():
+    """Handle graceful shutdown."""
+    global scheduler
+    logger.info("Bot closing, stopping scheduler...")
+    if scheduler:
+        await scheduler.stop()
+    logger.info("Shutdown complete")
+
+
+# ============================================
 # RUN
 # ============================================
 
@@ -1685,7 +1700,17 @@ def main():
         return
 
     logger.info("Starting Kodak v2...")
-    bot.run(token)
+
+    async def runner():
+        async with bot:
+            await bot.start(token)
+
+    try:
+        asyncio.run(runner())
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
+    finally:
+        logger.info("Bot stopped")
 
 
 if __name__ == "__main__":

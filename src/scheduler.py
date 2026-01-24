@@ -2,10 +2,39 @@
 
 import asyncio
 import logging
+import pytz
 from datetime import datetime, timedelta
 from typing import Callable, Awaitable, Optional
 
 logger = logging.getLogger('kodak')
+
+
+def get_user_local_time(user: dict) -> datetime:
+    """Get the current time in the user's timezone."""
+    tz_name = user.get('timezone') or 'UTC'
+    try:
+        tz = pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        logger.warning(f"Unknown timezone '{tz_name}' for user {user.get('user_id')}, using UTC")
+        tz = pytz.UTC
+    return datetime.now(tz)
+
+
+def is_prompt_time_for_user(user: dict) -> bool:
+    """Check if it's currently the user's scheduled prompt time in their timezone."""
+    prompt_time = user.get('prompt_time')
+    if not prompt_time:
+        return False
+
+    user_now = get_user_local_time(user)
+    current_time_str = user_now.strftime("%H:%M")
+    return current_time_str == prompt_time
+
+
+def is_too_late_for_user(user: dict) -> bool:
+    """Check if it's too late (after 11pm) in the user's timezone."""
+    user_now = get_user_local_time(user)
+    return user_now.hour >= 23
 
 
 class JournalScheduler:
@@ -13,12 +42,12 @@ class JournalScheduler:
     Background scheduler for daily journal prompts.
 
     Runs as an asyncio task, checking every minute for users
-    who should receive their daily prompt.
+    who should receive their daily prompt. Handles timezone-aware scheduling.
     """
 
     def __init__(
         self,
-        get_users_for_prompt: Callable[[str], Awaitable[list[dict]]],
+        get_users_eligible_for_prompt: Callable[[], Awaitable[list[dict]]],
         get_users_with_missed_prompts: Callable[[], Awaitable[list[dict]]],
         get_users_needing_reengagement: Callable[[int], Awaitable[list[dict]]],
         send_scheduled_prompt: Callable[[dict], Awaitable[None]],
@@ -31,7 +60,7 @@ class JournalScheduler:
         Initialize the scheduler.
 
         Args:
-            get_users_for_prompt: Async function to get users due for prompt at given time
+            get_users_eligible_for_prompt: Async function to get users who haven't been prompted today
             get_users_with_missed_prompts: Async function to get users who missed today's prompt
             get_users_needing_reengagement: Async function to get inactive users
             send_scheduled_prompt: Async function to send a scheduled prompt to a user
@@ -40,7 +69,7 @@ class JournalScheduler:
             mark_prompt_sent: Async function to mark that prompt was sent
             check_interval_seconds: How often to check (default 60 seconds)
         """
-        self.get_users_for_prompt = get_users_for_prompt
+        self.get_users_eligible_for_prompt = get_users_eligible_for_prompt
         self.get_users_with_missed_prompts = get_users_with_missed_prompts
         self.get_users_needing_reengagement = get_users_needing_reengagement
         self.send_scheduled_prompt = send_scheduled_prompt
@@ -51,7 +80,7 @@ class JournalScheduler:
 
         self._task: Optional[asyncio.Task] = None
         self._running = False
-        self._last_check_minute: Optional[str] = None
+        self._last_check_minute: Optional[int] = None  # Track by UTC minute to avoid duplicate checks
         self._startup_check_done = False
         self._last_reengagement_check: Optional[datetime] = None
 
@@ -115,20 +144,24 @@ class JournalScheduler:
         await self._check_reengagement()
 
     async def _check_scheduled_prompts(self):
-        """Check if any users are due for their scheduled prompt."""
-        current_time = datetime.now().strftime("%H:%M")
-
-        # Only check once per minute
-        if current_time == self._last_check_minute:
+        """Check if any users are due for their scheduled prompt (timezone-aware)."""
+        # Only check once per minute (use UTC minute to deduplicate)
+        current_utc_minute = datetime.utcnow().minute
+        if current_utc_minute == self._last_check_minute:
             return
-        self._last_check_minute = current_time
+        self._last_check_minute = current_utc_minute
 
         try:
-            users = await self.get_users_for_prompt(current_time)
+            # Get all users eligible for a prompt today
+            users = await self.get_users_eligible_for_prompt()
 
             for user in users:
+                # Check if it's the right time in the user's timezone
+                if not is_prompt_time_for_user(user):
+                    continue
+
                 try:
-                    logger.info(f"Sending scheduled prompt to user:{user['user_id']}")
+                    logger.info(f"Sending scheduled prompt to user:{user['user_id']} (tz: {user.get('timezone', 'UTC')})")
                     await self.send_scheduled_prompt(user)
                     await self.mark_prompt_sent(user['user_id'])
                 except Exception as e:
@@ -138,12 +171,12 @@ class JournalScheduler:
             logger.error(f"Error checking scheduled prompts: {e}")
 
     async def _check_missed_prompts(self):
-        """Check for and handle missed prompts (called on startup)."""
+        """Check for and handle missed prompts (called on startup). Timezone-aware."""
         try:
             users = await self.get_users_with_missed_prompts()
 
             for user in users:
-                hours_since = self._hours_since_prompt_time(user.get('prompt_time'))
+                hours_since = self._hours_since_prompt_time(user)
 
                 if hours_since is None:
                     continue
@@ -157,8 +190,8 @@ class JournalScheduler:
                     except Exception as e:
                         logger.error(f"Failed to send catch-up to {user['user_id']}: {e}")
 
-                # 4-12 hours and not too late: gentle catch-up
-                elif hours_since < 12 and not self._is_too_late():
+                # 4-12 hours and not too late in user's timezone: gentle catch-up
+                elif hours_since < 12 and not is_too_late_for_user(user):
                     try:
                         logger.info(f"Sending gentle catch-up to user:{user['user_id']} ({hours_since:.1f}h late)")
                         await self.send_catch_up_prompt(user, int(hours_since))
@@ -188,28 +221,26 @@ class JournalScheduler:
         except Exception as e:
             logger.error(f"Error checking re-engagement: {e}")
 
-    def _hours_since_prompt_time(self, prompt_time: Optional[str]) -> Optional[float]:
-        """Calculate hours since the user's scheduled prompt time today."""
+    def _hours_since_prompt_time(self, user: dict) -> Optional[float]:
+        """Calculate hours since the user's scheduled prompt time today (timezone-aware)."""
+        prompt_time = user.get('prompt_time')
         if not prompt_time:
             return None
 
         try:
             hour, minute = map(int, prompt_time.split(':'))
-            scheduled = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+            user_now = get_user_local_time(user)
+            scheduled = user_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
             # If scheduled time is in the future, it wasn't missed
-            if scheduled > datetime.now():
+            if scheduled > user_now:
                 return None
 
-            delta = datetime.now() - scheduled
+            delta = user_now - scheduled
             return delta.total_seconds() / 3600
 
         except (ValueError, AttributeError):
             return None
-
-    def _is_too_late(self) -> bool:
-        """Check if it's too late at night to send a prompt (after 11pm)."""
-        return datetime.now().hour >= 23
 
 
 # ============================================
