@@ -78,7 +78,6 @@ Sessions adapt: share a lot and Kodak will explore further; keep it brief and it
 | Command | Description |
 |---------|-------------|
 | `/export` | Download all your data (JSON) |
-| `/backup` | Download database file |
 | `/clear` | Delete everything |
 
 ## Personality Presets

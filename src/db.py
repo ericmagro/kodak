@@ -28,9 +28,9 @@ ALLOWED_SESSION_COLUMNS = {
 }
 
 # Database path configuration
-_default_db_path = Path(__file__).parent.parent / "kodak-v2.db"
+_default_db_path = Path(__file__).parent.parent / "kodak.db"
 DB_PATH = Path(os.getenv("KODAK_DB_PATH", str(_default_db_path)))
-SCHEMA_PATH = Path(__file__).parent.parent / "schema-v2.sql"
+SCHEMA_PATH = Path(__file__).parent.parent / "schema.sql"
 
 
 # ============================================

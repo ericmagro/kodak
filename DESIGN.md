@@ -602,7 +602,6 @@ CREATE TABLE value_snapshots (
 | `/changes` | Keep — still useful |
 | `/mark` | Keep — importance still matters |
 | `/confidence` | Keep — confidence still matters |
-| `/backup` | Keep — still useful |
 | `/privacy` | Keep simplified — per-belief toggle for "include in value profile" |
 
 ---
