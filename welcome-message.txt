@@ -4,24 +4,23 @@ Kodak is a bot that maps your beliefs through conversation. Just chat naturally,
 
 Kodak is designed to be warm but honest — it'll ask real questions and point out contradictions. Think of it like a curious friend who actually engages with your ideas, not a yes-man.
 
-**Run your own Kodak:**
+**Try it out:**
+1. Click on @Kodak in the member list (right sidebar)
+2. Click "Message" to start a DM
+3. Just talk! It'll ask follow-up questions and start mapping
 
-The bot runs locally on your computer. Your data stays completely private — it never leaves your machine.
-
-👉 **Get started:** https://github.com/ericmagro/kodak
-
-You'll need:
-• Python 3.12+
-• A Discord bot token (free)
-• An Anthropic API key (~$0.01-0.02 per message)
-
-Full setup guide is in the repo. Takes about 10 minutes.
-
-**Commands (once running):**
+**Commands:**
 • `/map` — See your belief map
 • `/beliefs` — Raw list of everything captured
 • `/pause` — Stop tracking (keep chatting)
 • `/export` — Download your data
 • `/clear` — Delete everything
 
-**Questions or issues?** Ask in #general or open an issue on GitHub.
+**Heads up:**
+• Each message costs real money (API fees), so have good conversations but don't spam 😅
+• Data may reset occasionally (server restarts). Use `/export` to save your beliefs.
+
+**Want persistent data?** Run your own instance locally — your data never leaves your machine:
+👉 https://github.com/ericmagro/kodak
+
+Questions? Ask in #general
