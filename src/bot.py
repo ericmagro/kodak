@@ -39,7 +39,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 MESSAGES_BEFORE_SUMMARY = 8
 
 # Rate limiting: messages per user per hour (0 = unlimited)
-RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "30"))
+RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "15"))
 
 # Track message timestamps per user for rate limiting
 user_message_times: dict[str, list[float]] = defaultdict(list)
