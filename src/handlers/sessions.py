@@ -509,7 +509,11 @@ async def handle_onboarding_complete(
     timezone: str,
     start_now: bool = False
 ):
-    """Complete the onboarding process for a user."""
+    """Complete the onboarding process for a user.
+
+    Note: start_now is handled by the caller (commands/journal.py) since
+    it has access to the channel needed to start the session.
+    """
     await update_user(
         user_id,
         onboarding_complete=1,
@@ -520,9 +524,3 @@ async def handle_onboarding_complete(
     )
 
     logger.info(f"User {user_id} completed onboarding: {personality}, {time} {timezone}")
-
-    # Start first session if requested
-    if start_now:
-        # This would need access to the bot and channel
-        # Implementation would be moved to main bot module
-        pass
