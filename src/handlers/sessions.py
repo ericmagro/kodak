@@ -3,6 +3,7 @@
 import uuid
 import asyncio
 import logging
+import random
 import discord
 from datetime import datetime, timedelta
 
@@ -77,6 +78,9 @@ async def start_journal_session(
 
     await channel.send(message)
 
+    # Add opener to session history so LLM has context
+    session.add_bot_message(message)
+
     log_session_event(
         logger, "session_started", session_id, user_id,
         prompt_type=prompt_type, is_first_session=is_first, personality=personality
@@ -124,7 +128,7 @@ async def process_session_message(
             belief_dicts = [
                 {
                     'statement': b.statement,
-                    'themes': b.themes,
+                    'topics': b.topics,
                     'confidence': b.confidence
                 }
                 for b in extraction_result.beliefs
@@ -150,28 +154,41 @@ async def process_session_message(
         logger.info(f"Sent response to user {user_id} in session {session.session_id}")
 
     except anthropic.APITimeoutError:
-        logger.error("LLM request timed out during session response")
+        logger.error("LLM request timed out during session response", exc_info=True)
         await channel.send("Sorry, I'm taking too long to think. Let me try to respond more quickly...")
         # Try with a shorter prompt
         try:
             fallback_response = await generate_session_response(session, message_content, fallback=True)
             await channel.send(fallback_response)
         except Exception as e:
-            logger.error(f"Fallback response also failed: {e}")
+            logger.error(f"Fallback response also failed: {e}", exc_info=True)
             await channel.send("I'm having trouble responding right now. Let's continue this conversation later.")
     except anthropic.APIError as e:
-        logger.error(f"LLM API error: {e}")
+        logger.error(f"LLM API error: {e}", exc_info=True)
         await channel.send("I'm having trouble thinking right now. Can you try again in a moment?")
     except Exception as e:
-        logger.error(f"Unexpected error in session response: {e}")
-        await channel.send("I hear you. Tell me more about that.")
+        logger.error(f"Unexpected error in session response: {e}", exc_info=True)
+        # Use varied fallback responses
+        fallbacks = [
+            "That's interesting. What else comes to mind when you think about that?",
+            "I want to understand better. Can you say more about what you mean?",
+            "Tell me more about what's behind that.",
+            "What makes that feel important right now?",
+        ]
+        await channel.send(random.choice(fallbacks))
 
 
 async def generate_session_response(session: SessionState, user_message: str, fallback: bool = False) -> str:
     """Generate a contextual response using the LLM."""
     if fallback:
-        # Simple fallback for timeouts
-        return "I hear you. Tell me more about that."
+        # Varied fallback responses for timeouts
+        fallbacks = [
+            "I hear you. Tell me more about that.",
+            "That resonates. What else is there?",
+            "I'm curious—what's the feeling underneath that?",
+            "Say more about that.",
+        ]
+        return random.choice(fallbacks)
 
     # Build system prompt
     system_prompt = build_session_system_prompt(
@@ -195,14 +212,16 @@ async def generate_session_response(session: SessionState, user_message: str, fa
     full_system = f"{system_prompt}\n\n{instruction}"
 
     # Build conversation history from session messages
+    # Note: user_message was already added to session.messages in process_session_message
+    # so we just use the recent context directly
     messages = session.get_recent_context(6)  # Get last 6 messages (3 exchanges)
 
-    # Add current message
-    messages.append({"role": "user", "content": user_message})
+    # Ensure messages alternate correctly and filter to just role/content for API
+    api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
 
     try:
         response = await create_message(
-            messages=messages,
+            messages=api_messages,
             system=full_system,
             max_tokens=300 if not fallback else 100
         )
@@ -213,8 +232,8 @@ async def generate_session_response(session: SessionState, user_message: str, fa
         return response
 
     except Exception as e:
-        logger.error(f"Error generating session response: {e}")
-        return "I hear you. Tell me more about that."
+        logger.error(f"Error generating session response: {e}", exc_info=True)
+        raise  # Re-raise so caller can handle appropriately
 
 
 async def should_prompt_weekly_summary(user_id: str, user: dict = None) -> bool:

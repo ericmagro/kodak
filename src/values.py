@@ -334,7 +334,7 @@ def generate_session_insight(extracted_beliefs: list[dict]) -> Optional[str]:
     Generate an insight about themes from a single session.
 
     Args:
-        extracted_beliefs: List of {'statement': str, 'themes': list[str]}
+        extracted_beliefs: List of {'statement': str, 'topics': list[str]}
 
     Returns:
         A short insight string, or None if not enough data.
@@ -345,7 +345,7 @@ def generate_session_insight(extracted_beliefs: list[dict]) -> Optional[str]:
     # Count theme occurrences across all beliefs
     theme_counts: dict[str, int] = {}
     for belief in extracted_beliefs:
-        for theme in belief.get('themes', []):
+        for theme in belief.get('topics', []):
             theme_counts[theme] = theme_counts.get(theme, 0) + 1
 
     if not theme_counts:
