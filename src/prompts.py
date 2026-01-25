@@ -197,7 +197,7 @@ CLOSURE_TEMPLATES = {
     "trickster": {
         "base": "Alright, go touch grass. See you tomorrow.",
         "with_theme": "Alright, enough about {theme}. Go touch grass.",
-        "first_session": "Not bad for a first run. Try not to do anything too unhinged before tomorrow.",
+        "first_session": "Not bad for a first session. Try not to do anything too unhinged before tomorrow.",
         "short_session": "Short and sweet. Peace.",
     },
     "therapist": {

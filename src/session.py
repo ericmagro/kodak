@@ -204,14 +204,14 @@ def determine_next_stage(session: SessionState) -> SessionStage:
             return SessionStage.CONNECT
 
         # Continue probing if under ceiling
-        if exchanges < ceiling - 1:  # Leave room for close
+        if exchanges < ceiling:
             return SessionStage.PROBE
 
         return SessionStage.CLOSE
 
     if current == SessionStage.CONNECT:
         # After connecting, one more probe or close
-        if exchanges < ceiling - 1:
+        if exchanges < ceiling:
             return SessionStage.PROBE
         return SessionStage.CLOSE
 
