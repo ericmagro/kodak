@@ -16,7 +16,7 @@ from db import (
 )
 from prompts import get_opener, get_first_session_framing, get_closure
 from personality import build_session_system_prompt
-from extractor import extract_beliefs_from_response
+from extractor import extract_beliefs_and_values
 from client import create_message
 import anthropic
 from values import update_user_value_profile, create_value_snapshot
@@ -108,16 +108,29 @@ async def process_session_message(
 
     # Extract beliefs from this message (async, doesn't block response)
     try:
-        beliefs = await extract_beliefs_from_response(
-            message_content,
-            session.session_id,
-            user_id,
-            channel.id,
-            str(channel.id)  # Using channel.id as message_id since we don't have access to the actual message
+        # Get existing beliefs for context
+        from db import get_user_beliefs
+        existing_beliefs = await get_user_beliefs(user_id, limit=20)
+
+        # Extract with conversation context
+        extraction_result = await extract_beliefs_and_values(
+            message=message_content,
+            conversation_context=session.messages,
+            existing_beliefs=existing_beliefs
         )
-        if beliefs:
-            session.extracted_beliefs.extend(beliefs)
-            logger.info(f"Extracted {len(beliefs)} beliefs from user {user_id}")
+
+        if extraction_result.beliefs:
+            # Convert ExtractedBelief objects to dicts for session storage
+            belief_dicts = [
+                {
+                    'statement': b.statement,
+                    'themes': b.themes,
+                    'confidence': b.confidence
+                }
+                for b in extraction_result.beliefs
+            ]
+            session.extracted_beliefs.extend(belief_dicts)
+            logger.info(f"Extracted {len(belief_dicts)} beliefs from user {user_id}")
     except Exception as e:
         logger.error(f"Belief extraction failed for user {user_id}: {e}")
 
@@ -348,7 +361,7 @@ async def close_session(
     )
 
     # Generate same-session insight (if enough data)
-    from extractor import generate_session_insight
+    from values import generate_session_insight
     session_insight = generate_session_insight(session.extracted_beliefs)
     if session_insight and not session.is_first_session:
         closure_parts.append(session_insight)
