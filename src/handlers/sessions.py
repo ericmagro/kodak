@@ -19,7 +19,7 @@ from db import (
 from prompts import get_opener, get_first_session_framing, get_closure
 from personality import build_session_system_prompt
 from extractor import extract_beliefs_and_values
-from client import create_message
+from client import create_message_async
 import anthropic
 
 logger = logging.getLogger('kodak')
@@ -220,7 +220,7 @@ async def generate_session_response(session: SessionState, user_message: str, fa
     api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
 
     try:
-        response = await create_message(
+        response = await create_message_async(
             messages=api_messages,
             system=full_system,
             max_tokens=300 if not fallback else 100
