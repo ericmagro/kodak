@@ -69,15 +69,16 @@ async def register_journal_commands(bot):
 
         # Check if they've completed onboarding
         if not user.get('onboarding_complete'):
+            # Acknowledge the command
             await interaction.response.send_message(
-                "👋 **Welcome to Kodak!**\n\n"
-                "Let's get you set up first. I'll ask you a few quick questions to personalize your experience.",
+                "👋 **Starting your setup...**",
                 ephemeral=True
             )
 
-            # Start onboarding flow
-            flow = OnboardingFlow(user_id, on_complete=handle_onboarding_complete)
-            await flow.start(interaction)
+            # Get DM channel and start onboarding flow
+            dm_channel = await interaction.user.create_dm()
+            flow = OnboardingFlow(dm_channel, user_id, on_complete=handle_onboarding_complete)
+            await flow.start()
             return
 
         # Check for active session
