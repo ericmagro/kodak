@@ -13,9 +13,9 @@ Phases 1-4 complete, but deployment revealed critical runtime errors. Focusing o
 
 ---
 
-## Phase 0: Critical Stability Fixes (In Progress)
+## Phase 0: Critical Stability Fixes (Complete)
 
-**Status:** Core import errors fixed. Remaining work on error handling and testing.
+**Status:** All critical bugs fixed. Bot is production-ready with first user onboarded successfully.
 
 ### Completed (Jan 2025)
 - [x] **Import errors** — Fixed 15+ missing/misnamed function imports across codebase
@@ -29,6 +29,11 @@ Phases 1-4 complete, but deployment revealed critical runtime errors. Focusing o
 - [x] **Type errors** — Fixed ValueProfile dict/object access patterns
 - [x] **Invalid parameters** — Removed non-existent `include_topics` parameter
 - [x] **JSON encoding bugs** — Fixed double-encoding in theme exports
+- [x] **Database schema bug** — Missing `last_prompt_date` column (Jan 25 evening)
+  - Added column to schema.sql and migration
+  - Added error handling to onboarding callbacks
+  - Fixed `last_opener` allowed column issue
+  - **Result:** Onboarding persistence works, scheduled messages delivered successfully
 
 ### Remaining Work
 - [ ] **Exception handler double-response errors** — Fix interaction.response called twice in error paths
