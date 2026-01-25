@@ -515,7 +515,11 @@ class OnboardingFlow:
         timezone = self.state.selected_timezone or "UTC"
 
         clear_onboarding_state(self.user_id)
-        await self.on_complete(personality, time, timezone, True)
+        try:
+            await self.on_complete(personality, time, timezone, True)
+        except Exception as e:
+            logger.error(f"Failed to complete onboarding for {self.user_id}: {e}", exc_info=True)
+            await self.channel.send(f"⚠️ Error saving your settings: {e}\nPlease try again with `/journal`")
 
     async def _on_wait(self):
         """User wants to wait for scheduled prompt."""
@@ -541,7 +545,11 @@ class OnboardingFlow:
         )
 
         clear_onboarding_state(self.user_id)
-        await self.on_complete(personality, time, timezone, False)
+        try:
+            await self.on_complete(personality, time, timezone, False)
+        except Exception as e:
+            logger.error(f"Failed to complete onboarding for {self.user_id}: {e}", exc_info=True)
+            await self.channel.send(f"⚠️ Error saving your settings: {e}\nPlease try again with `/journal`")
 
 
 # ============================================
