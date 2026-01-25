@@ -30,6 +30,9 @@ AUDIT.md
 IMPLEMENTATION-PLAN.md
 VALUES-SYSTEM-AUDIT.md
 VISION-ARCHIVE.md
+ROADMAP.md
+DEPLOYMENT-NOTES.md
+DESIGN.md
 
 # Backup files
 src/bot_original.py
