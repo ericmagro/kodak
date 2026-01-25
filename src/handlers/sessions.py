@@ -12,14 +12,14 @@ from session import SessionState, SessionStage, create_session, end_session, get
 from db import (
     get_or_create_user, update_user,
     create_session as db_create_session, end_session as db_end_session,
-    update_session, get_completed_session_count
+    update_session, get_completed_session_count,
+    update_user_value_profile, create_value_snapshot
 )
 from prompts import get_opener, get_first_session_framing, get_closure
 from personality import build_session_system_prompt
 from extractor import extract_beliefs_and_values
 from client import create_message
 import anthropic
-from values import update_user_value_profile, create_value_snapshot
 
 logger = logging.getLogger('kodak')
 
