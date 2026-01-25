@@ -1,14 +1,14 @@
 # Kodak
 
-A Discord bot that reveals what you actually value—through daily conversation.
+A Discord bot that notices what you keep coming back to.
 
-Most people can't articulate their values. Ask them and you get generic answers: "family, honesty, success." Kodak surfaces what you *really* prioritize by extracting beliefs from your reflections and mapping them to a validated psychological framework.
+Most people can't articulate what they actually care about. Ask them and you get generic answers: "family, honesty, success." Kodak surfaces what you *really* keep returning to—by paying attention over time.
 
 **What makes it different:**
-- **Automatic belief extraction** — Just talk naturally; Kodak identifies the beliefs underneath
-- **Real psychological framework** — Uses [Schwartz's 10 Basic Human Values](https://en.wikipedia.org/wiki/Theory_of_Basic_Human_Values), used in cross-cultural research worldwide
-- **Tracks change over time** — See how your values shift across weeks and months
+- **Just talk naturally** — Kodak notices patterns in what you share
+- **Surfaces themes over time** — See what you keep coming back to across weeks and months
 - **Honest, not sycophantic** — Kodak will notice contradictions and push back on your ideas
+- **Your data, your control** — Self-hosted, open source, exportable
 
 ## What a Session Looks Like
 
@@ -38,10 +38,10 @@ Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief 
 | Feature | What it does |
 |---------|--------------|
 | **Daily check-ins** | Thoughtful prompts at a time you choose |
-| **Belief extraction** | Surfaces what you believe from natural conversation |
-| **Value profiling** | Maps beliefs to Schwartz's 10 values |
-| **Weekly summaries** | Patterns, themes, and value shifts from your week |
-| **Value comparison** | Share your profile to see how you align with others |
+| **Pattern recognition** | Notices themes from natural conversation, shows supporting quotes and confidence levels |
+| **Weekly summaries** | What you kept coming back to, shifts in emphasis |
+| **Milestone celebrations** | Encouraging messages at 5, 15, 20, 50 sessions |
+| **Comparison** | Share your themes with someone, explore where you align and differ |
 | **Personality presets** | Choose your conversational style (philosopher, therapist, trickster, etc.) |
 
 ## Privacy
@@ -59,7 +59,7 @@ Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief 
 |---------|-------------|
 | `/journal` | Start a session right now |
 | `/schedule [time]` | Set your daily check-in time |
-| `/values` | See your value profile |
+| `/themes` | See patterns Kodak has noticed, with quotes from your conversations |
 | `/summary week` | Get your weekly digest |
 | `/help` | See all commands |
 
@@ -72,15 +72,21 @@ Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief 
 | `/explore [topic]` | Dive into a specific topic |
 | `/core` | Show your most important beliefs |
 | `/tensions` | Find potentially conflicting beliefs |
+| `/history [id]` | See how a belief has evolved over time |
+| `/changes` | See beliefs that have changed recently |
+| `/confidence [id] [1-5]` | Update your confidence in a belief |
+| `/mark [id] [1-5]` | Mark how important a belief is to you |
+| `/forget [id]` | Delete a belief you no longer hold |
+| `/undo` | Restore the last forgotten belief |
 
-### Values & Summaries
+### Themes & Summaries
 | Command | Description |
 |---------|-------------|
-| `/values` | See your current value profile |
-| `/values-history` | See how values shifted over time |
+| `/themes` (or `/values`) | See patterns Kodak has noticed |
+| `/themes-history` (or `/values-history`) | See how your themes have shifted |
 | `/summary week` | Weekly digest with patterns and insights |
 | `/summaries` | View past summaries |
-| `/share-values` | Export your values to share |
+| `/share-themes` (or `/share-values`) | Export your themes to share |
 | `/compare-file` | Compare with someone's export |
 
 ### Scheduling & Preferences
@@ -91,6 +97,7 @@ Sessions adapt to your energy. Share a lot and Kodak goes deeper. Keep it brief 
 | `/skip` | Skip today's check-in |
 | `/pause` / `/resume` | Pause or resume check-ins |
 | `/setup` | Choose a personality preset |
+| `/style` | Fine-tune personality dimensions |
 | `/depth` | Set session depth (quick/standard/deep) |
 
 ### Data Management
@@ -109,24 +116,15 @@ Choose how Kodak shows up:
 - **The Trickster** — Playful, irreverent, challenges you
 - **The Therapist** — Gentle, safe, never pushes
 
-## The Values Framework
+## How It Works
 
-Kodak uses Schwartz's 10 Basic Human Values—a research-backed framework used in psychology worldwide:
+Kodak pays attention to your conversations over time and surfaces patterns:
 
-| Value | What it means |
-|-------|---------------|
-| Self-Direction | Independence, creativity, freedom |
-| Stimulation | Excitement, novelty, challenge |
-| Hedonism | Pleasure, enjoying life |
-| Achievement | Success, competence, ambition |
-| Power | Authority, wealth, social status |
-| Security | Safety, stability, order |
-| Conformity | Obedience, self-discipline |
-| Tradition | Respect for customs, humility |
-| Benevolence | Helping those close to you |
-| Universalism | Tolerance, social justice for all |
+- **Themes** you keep returning to (accomplishment, connection, freedom, security, etc.)
+- **Shifts** in what you emphasize week to week
+- **Tensions** where your stated beliefs might contradict each other
 
-Your beliefs are automatically tagged with relevant values. Over time, this builds a profile of what you actually prioritize—not what you think you should value.
+Think of it as a curious friend who occasionally says "hey, have you noticed you keep talking about X?"
 
 ## Run Your Own
 
@@ -156,11 +154,11 @@ Each message costs ~$0.01-0.02 (Anthropic API). A typical daily session runs $0.
 
 ## Design Philosophy
 
-Kodak is designed to be a genuine thinking partner, not a yes-man.
+Kodak is designed to be a curious thinking partner, not a yes-man.
 
-Most AI assistants validate everything you say. This feels good but doesn't help you grow. Kodak engages honestly—noticing contradictions, questioning assumptions, sometimes disagreeing.
+Most AI assistants validate everything you say. This feels good but doesn't help you grow. Kodak engages honestly—noticing patterns, questioning assumptions, sometimes pointing out contradictions.
 
-The goal isn't to make you feel good about what you believe. It's to help you see what you *actually* believe, and whether those beliefs serve you.
+The goal isn't to tell you who you are. It's to help you notice what you keep coming back to, and whether that serves you.
 
 ## License
 

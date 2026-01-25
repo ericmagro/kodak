@@ -3,160 +3,130 @@
 A living document of where Kodak is going.
 
 **See also:**
-- [VISION.md](VISION.md) — The bigger picture: decentralized compatibility matching
-- [VALUES-SYSTEM-AUDIT.md](VALUES-SYSTEM-AUDIT.md) — Technical audit of the values system
+- [VALUES-SYSTEM-AUDIT.md](VALUES-SYSTEM-AUDIT.md) — Technical notes on theme extraction
+
+---
+
+## Current Priority: Ready for Launch! 🚀
+
+Phases 1, 2, 3, & 4 complete. Kodak is production-ready with polished UX, engaging first experience, and clean, maintainable code.
 
 ---
 
 ## Recently Completed
 
+- [x] **Code refactoring** — Split 2,057-line bot.py into organized modules (90% reduction!)
+- [x] **Production readiness** — Health check endpoint and structured JSON logging
+- [x] Milestone messages (5, 15, 20, 50 sessions) — Celebratory encouragement
+- [x] Weekly summary prompting — Proactive nudge after 5+ sessions
+- [x] Documentation updates — All commands properly documented
 - [x] Weekly summaries (`/summary week`)
 - [x] Past summaries viewing (`/summaries`)
-- [x] Value snapshots for tracking change over time
-- [x] File-based value comparison (`/share-values`, `/compare-file`)
+- [x] Theme snapshots for tracking change over time
+- [x] File-based theme comparison (`/share-themes`, `/compare-file`)
+- [x] Repositioning: "themes" not "psychological profile"
+- [x] Same-session insights at session close
+- [x] **Phase 4: Engagement Features** — Sample sessions in onboarding, source beliefs with themes, softer theme language, extraction honesty
 
 ---
 
-## Near-Term: Values System Fixes
+## Phase 1: Critical Fixes ✓
 
-These address critical issues identified in the [values system audit](VALUES-SYSTEM-AUDIT.md).
+Infrastructure and reliability.
 
-### Fix Normalization (Critical)
-Current max-value normalization loses magnitude information, making comparisons less meaningful.
-
-- [ ] Switch to sum-normalization or z-scores
-- [ ] Add "values intensity" metric (how values-driven overall)
-- [ ] Compare on both priority structure AND intensity
-
-### Add Uncertainty Display (Critical)
-System shows false precision. Users need to understand confidence levels.
-
-- [ ] Show confidence bounds on profiles
-- [ ] Frame early profiles as "emerging themes"
-- [ ] Require minimum beliefs (~30) for comparisons
-- [ ] Visual indication of profile maturity
-
-### Enable User Corrections (High)
-Let users fix misclassified values—improves accuracy and builds training data.
-
-- [ ] "This belief was tagged wrong" feedback
-- [ ] Track correction rate as quality signal
-- [ ] Use corrections to improve extraction over time
-
-### Extraction Validation (High)
-We don't know how reliable the LLM extraction is.
-
-- [ ] Build validation dataset (100-200 human-labeled beliefs)
-- [ ] Measure test-retest reliability
-- [ ] Measure inter-prompt reliability
+- [x] **Shared Anthropic client** — Consolidated into `client.py` with `create_message()` helper
+- [x] **LLM timeout** — 30-second default timeout on all LLM calls
+- [x] **Error handling** — `APITimeoutError` and `APIError` caught with user-facing messages
+- [x] **In-memory state persistence** — `last_opener` persisted to DB with migration support
 
 ---
 
-## Near-Term: Features
+## Phase 2: UX Quick Wins ✓
 
-### Monthly Summaries
-Extend weekly summaries to monthly cadence.
+Make the experience feel polished and motivating.
 
-- [ ] Longer-term pattern detection
-- [ ] Value change narratives across weeks
-- [ ] Comparison to previous months
+- [x] **Tier help command** — Essential commands by default, "See all commands" button expands
+- [x] **Progress indicator on `/themes`** — Shows belief count and distance to emerging (15) / stable (50) thresholds
+- [x] **Better empty state for `/themes`** — Shows progress toward meaningful themes with specific counts
+- [x] **Milestone messages** — At key session counts, show encouragement:
+  - **5 sessions:** "Getting to know you" phase complete. Tease what's coming.
+  - **15-20 sessions:** "Themes are emerging." First real payoff moment.
+  - **~50 sessions:** "Your themes are stable." Invite comparison/sharing.
+- [x] **Prompt for weekly summary** — After 5+ sessions in a week, nudge: "Want to see your weekly summary?"
 
-### Year-End Summary
-Comprehensive annual reflection:
-- Accomplishments & milestones mentioned
-- Major belief changes (January vs December)
-- Value evolution across the year
-- Themes, patterns, growth moments
-- Stats (sessions, beliefs, most active months)
+---
+
+## Phase 3: Code Cleanup ✓
+
+Split bot.py and improve structure.
+
+- [x] **Split bot.py** into:
+  - `bot.py` — Main bot, event handlers, startup (209 lines, down from 2,057!)
+  - `commands/` — Slash commands grouped by feature (journal, themes, beliefs, summary, data, help, settings)
+  - `handlers/` — Message processing and session lifecycle
+  - `views/` — Discord UI components (ready for future use)
+- [x] **Health check endpoint** — HTTP server on port 8080 for Railway/monitoring
+- [x] **Structured JSON logging** — Production-ready JSON logs with context
+
+---
+
+## Phase 4: Engagement Features ✓
+
+Make the first experience compelling and build trust in themes.
+
+- [x] **Sample session in onboarding** — Show a sample conversation during setup so users know what to expect
+- [x] **Show source beliefs with themes** — When `/themes` shows a theme, include 1-2 actual quotes that drove it. "Based on things like: [quote]"
+- [x] **Softer theme language** — "Achievement has come up" not "You value achievement." Observational, not definitional.
+- [x] **Extraction honesty** — Always surface uncertainty: "Based on what you've shared so far" and show sample size
+
+---
+
+## Phase 5: Post-Launch (After User Feedback)
+
+Only build these after real users tell us what's missing.
+
+### Self-Improving Corrections
+Each instance learns from its own user. When a theme is tagged wrong, the user corrects it and the bot adjusts future extraction.
+
+- [ ] "Does this seem right?" prompt on theme tags
+- [ ] Store corrections locally
+- [ ] Feed corrections into extraction context for future sessions
 
 ### Longer-Term Pattern Surfacing
-Proactive prompts that reference the past:
-- "Six months ago you said X. Still feel that way?"
-- "You've mentioned feeling stuck at work three times this month"
-- "Last year around this time you were dealing with Y"
+Kodak proactively brings up things from the past during sessions.
 
-### Tension Resolution
-When contradictory beliefs are detected:
-- Surface the tension explicitly
-- Guided exploration of which feels more true
-- Option to update or retire one belief
+- "Six months ago you said you wanted to leave your job. How's that feeling now?"
+- "You've mentioned feeling overwhelmed at work three times this month."
 
----
+### Monthly Summaries
+Extend `/summary week` to `/summary month`.
 
-## Medium-Term: Comparison & Compatibility
+### One-Sided Sharing
+Reframe `/share-themes` as "here's what I've learned about myself" for sharing with anyone, not just other Kodak users.
 
-### Improved Comparison
-- [ ] Weight dimensions differently for different relationship types
-- [ ] Add complementarity analysis (productive differences)
-- [ ] Show "questions to explore together" based on differences
-- [ ] Comparison history — track alignment over time
-
-### Portable Compatibility Profiles
-Standardized format for sharing value profiles outside Kodak.
-
-- [ ] Generate shareable "Compatibility Profile" document
-- [ ] Side-by-side comparison with detailed explanations
-- [ ] Frame as conversation starters, not scores
-
-### Relationship Type Matching
-Different weighting for:
-- Romantic relationships (attachment, life goals, conflict style)
-- Co-founder relationships (complementary skills, aligned ethics)
-- Friendships (shared interests, benevolence alignment)
+### Richer Comparison
+Better questions based on actual differences, comparison history over time.
 
 ---
 
-## Long-Term: Decentralized Matching
+## Deferred
 
-See [VISION.md](VISION.md) for full details.
-
-### Phase 1: Comparison Tool
-No network effects needed—useful for pairs.
-- Compare with known relationships (partner, potential co-founder, friend)
-- Export shareable profiles
-- Frame as "questions to explore together"
-
-### Phase 2: Opt-in Discovery
-- Publish blurred profile (Schwartz values only) to optional relay
-- Browse/search others who've opted in
-- Mutual consent required to reveal details
-- Single relay to start
-
-### Phase 3: Protocol Layer
-- Standardize profile format for interoperability
-- Multiple relays (federated)
-- Reputation/verification options
-- Consider DAO governance
-
----
-
-## Visualization & Export
-
-### Web Visualization
-Interactive graph of beliefs and values:
-- Nodes = beliefs, edges = relationships
-- Color-coded by value or topic
-- Filter by time period, confidence, importance
-
-### Obsidian Export
-Export belief network to markdown:
-- One file per belief with YAML frontmatter
-- Wikilinks between related beliefs
-- Ready for Obsidian vault
+- Tension resolution (guided exploration of contradictions)
+- Web visualization (interactive belief graph)
+- Obsidian export (markdown for notes apps)
+- Metrics/observability
 
 ---
 
 ## Ideas Parking Lot
 
-Lower priority or needs more thought:
-
-- **Voice input** — Speak instead of type
-- **Mood tracking** — Correlate mood with beliefs
-- **Goal tracking** — Set goals, check in on progress
-- **Shared journals** — Couples or friends journaling together
-- **API access** — Let users build on top of their data
-- **Group insights** — "What does this Discord server value?"
-- **Integrations** — Calendar, Spotify, etc.
+- Voice input
+- Mood tracking
+- Goal tracking
+- Shared journals (couples/friends)
+- API access
+- Group insights
+- Integrations (calendar, Spotify, etc.)
 
 ---
 

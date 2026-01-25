@@ -1,6 +1,6 @@
 # Kodak: Design Document
 
-> A Discord bot that helps you understand yourself through daily journaling.
+> A Discord bot that notices what you keep coming back to.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Kodak is a journaling companion that makes reflection effortless.
 
-Each day at a time you choose, it checks in with a thoughtful prompt. Through conversation, it draws out what's on your mind. Over time, it surfaces patterns in what you believe and value.
+Each day at a time you choose, it checks in with a thoughtful prompt. Through conversation, it draws out what's on your mind. Over time, it surfaces patterns—themes you keep returning to, shifts in focus, contradictions worth exploring.
 
 **The insight:** Most people don't journal because of the blank page problem. But everyone can answer a question. Kodak asks the questions.
 
@@ -33,8 +33,10 @@ Real values emerge through behavior, through what you actually spend time thinki
 
 1. **Daily prompts** — The bot initiates, you just respond
 2. **Conversational depth** — Follow-up questions draw out more than writing alone
-3. **Automatic extraction** — Beliefs and values surfaced as byproducts
-4. **Value framework** — Schwartz's 10 values enable meaningful comparison
+3. **Pattern recognition** — Themes and beliefs noticed as byproducts
+4. **Progress celebration** — Milestone messages encourage continued engagement
+5. **Proactive insights** — Weekly summary prompts after productive periods
+6. **Comparison** — Share themes with others, explore where you align and differ
 
 ---
 
@@ -49,33 +51,37 @@ A belief is a statement about how you see the world:
 
 Kodak extracts these from your reflections. You don't have to do anything special—just talk naturally.
 
-### Values
+### Themes
 
-Values are derived from beliefs using Schwartz's 10 Basic Human Values—a research-backed framework used in cross-cultural psychology:
+Themes are what you keep coming back to in conversation. Kodak pays attention to recurring patterns:
 
-| Value | What it means |
-|-------|---------------|
-| **Self-Direction** | Independence, creativity, freedom |
-| **Stimulation** | Excitement, novelty, challenge |
-| **Hedonism** | Pleasure, enjoying life |
-| **Achievement** | Success, competence, ambition |
-| **Power** | Authority, wealth, social status |
-| **Security** | Safety, stability, order |
-| **Conformity** | Obedience, self-discipline |
-| **Tradition** | Respect for customs, humility |
-| **Benevolence** | Helping those close to you |
-| **Universalism** | Tolerance, social justice for all |
+- **Achievement** — Success, competence, ambition
+- **Security** — Safety, stability, order
+- **Self-Direction** — Independence, creativity, freedom
+- **Connection** — Helping others, loyalty, relationships
+- **Stimulation** — Excitement, novelty, challenge
+- And others...
 
-Each belief you express is tagged with 0-3 values. Over time, this builds a profile of what you actually prioritize.
+This isn't a personality test—it's pattern recognition. The themes Kodak notices are based on what you actually talk about, not how you answer a questionnaire.
 
-### Value Comparison
+Kodak shows you the source material: when it identifies a theme, it includes quotes from your conversations that drove that assessment. It also surfaces uncertainty—how many conversations inform each pattern, and when more data is needed for confidence.
 
-Because values are standardized, you can compare them meaningfully:
-- **Alignment %** — How similar are two people's value priorities?
-- **Shared priorities** — Where do you both score high?
-- **Differences** — Where do your priorities diverge?
+### Theme Comparison
 
-This isn't about finding people who agree with you. It's about understanding where you connect and where you differ.
+When you share your themes with someone else, Kodak helps you explore:
+- **What you both talk about** — Shared themes
+- **Where you differ** — Different focuses
+- **Questions to explore** — Starting points for conversation
+
+This isn't about compatibility scores. It's about understanding where you connect and where you might see things differently.
+
+---
+
+## Getting Started
+
+New users are guided through an interactive setup that demonstrates exactly what to expect. Kodak shows sample conversations from different scenarios—work stress, relationships, personal goals—so users understand the journaling style before committing to daily check-ins.
+
+Users choose their preferred conversational personality and check-in time, then can start their first session immediately or wait for the scheduled prompt.
 
 ---
 
@@ -129,8 +135,8 @@ The bot initiates. You just respond. No blank page.
 ### 2. Conversation Draws Out More Than Writing Alone
 "What made that frustrating?" surfaces things a blank page wouldn't.
 
-### 3. Beliefs and Values Are Byproducts
-You come for "easy journaling." You stay for "wow, I can see what I actually value."
+### 3. Patterns Are Byproducts
+You come for "easy journaling." You stay for "wow, I never realized I keep coming back to that."
 
 ### 4. Warmth Without Sycophancy
 The bot accepts you fully while questioning your ideas freely. No empty validation. Honest reflection requires honest responses.
@@ -175,7 +181,7 @@ This affects tone and probing style, not the underlying extraction.
 | `scheduler.py` | Daily prompts, timezone-aware |
 | `session.py` | Session state, adaptive depth |
 | `extractor.py` | Belief + value extraction |
-| `values.py` | Schwartz framework, comparison |
+| `values.py` | Theme categorization, comparison |
 | `db.py` | Database operations |
 
 ### Deployment Options
@@ -186,12 +192,15 @@ This affects tone and probing style, not the underlying extraction.
 
 ## Commands Reference
 
-### Scheduling
+### Scheduling & Preferences
 - `/schedule [time]` — Set daily check-in time
 - `/journal` — Start a session now
 - `/skip` — Skip today's check-in
 - `/pause` / `/resume` — Pause/resume check-ins
 - `/timezone [tz]` — Set timezone
+- `/setup` — Choose personality preset
+- `/style` — Fine-tune personality dimensions
+- `/depth` — Set session depth preference
 
 ### Beliefs
 - `/map` — Beliefs organized by topic
@@ -199,11 +208,18 @@ This affects tone and probing style, not the underlying extraction.
 - `/belief [id]` — View one in detail
 - `/explore [topic]` — Dive into a topic
 - `/core` — Most important beliefs
+- `/history [id]` — See how a belief evolved
+- `/changes` — Recent belief changes
+- `/confidence [id] [1-5]` — Update belief confidence
+- `/mark [id] [1-5]` — Mark belief importance
+- `/forget [id]` — Delete a belief
+- `/undo` — Restore last forgotten belief
+- `/tensions` — Find contradicting beliefs
 
-### Values
-- `/values` — Your value profile
-- `/values-history` — How values shifted over time
-- `/share-values` — Export for comparison
+### Themes
+- `/themes` (or `/values`) — Patterns Kodak has noticed
+- `/themes-history` (or `/values-history`) — How themes shifted over time
+- `/share-themes` (or `/share-values`) — Export for comparison
 - `/compare-file` — Compare with someone's export
 
 ### Summaries

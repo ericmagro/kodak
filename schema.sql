@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
     tracking_paused INTEGER DEFAULT 0,
     first_session_complete INTEGER DEFAULT 0,      -- For special first session handling
     last_active TEXT,                              -- Last interaction timestamp
+    last_opener TEXT,                              -- Last opener used (avoid repeats)
+    last_weekly_summary_prompt TEXT,               -- Last time prompted for weekly summary
 
     -- Metadata
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
