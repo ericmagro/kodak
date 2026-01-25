@@ -66,6 +66,11 @@ async def _run_migrations(db):
         await db.commit()
         logger.info("Migration: added last_weekly_summary_prompt column to users")
 
+    if 'last_prompt_date' not in columns:
+        await db.execute("ALTER TABLE users ADD COLUMN last_prompt_date TEXT")
+        await db.commit()
+        logger.info("Migration: added last_prompt_date column to users")
+
 
 # ============================================
 # USERS

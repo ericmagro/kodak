@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     prompt_depth TEXT DEFAULT 'standard',          -- quick/standard/deep
     prompt_frequency TEXT DEFAULT 'daily',         -- daily/every_other/weekly
     last_prompt_sent TEXT,                         -- ISO timestamp
+    last_prompt_date TEXT,                         -- Date of last prompt (for daily dedup)
     last_prompt_responded INTEGER DEFAULT 1,       -- Did they respond to last prompt?
     prompts_ignored INTEGER DEFAULT 0,             -- Consecutive ignored prompts
 
