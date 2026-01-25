@@ -142,16 +142,16 @@ async def process_session_message(
     next_stage = determine_next_stage(session)
     session.stage = next_stage
 
-    # Check if we should close
-    if next_stage == SessionStage.CLOSE:
-        await close_session(channel, user, session)
-        return
-
-    # Generate response using LLM
+    # Generate response using LLM (including for close - let it wrap up naturally)
     try:
         bot_response = await generate_session_response(session, message_content)
         await channel.send(bot_response)
         logger.info(f"Sent response to user {user_id} in session {session.session_id}")
+
+        # If closing, do the cleanup after sending the closing response
+        if next_stage == SessionStage.CLOSE:
+            await close_session(channel, user, session, skip_message=True)
+            return
 
     except anthropic.APITimeoutError:
         logger.error("LLM request timed out during session response", exc_info=True)
@@ -205,7 +205,7 @@ async def generate_session_response(session: SessionState, user_message: str, fa
         SessionStage.ANCHOR: "Help them focus on one specific thing. Ask them to elaborate on the most interesting part.",
         SessionStage.PROBE: "Go deeper. Ask why this matters or what makes it significant.",
         SessionStage.CONNECT: "Help them connect this to broader patterns or values.",
-        SessionStage.CLOSE: "Begin to wrap up thoughtfully."
+        SessionStage.CLOSE: "Time to wrap up. Briefly acknowledge what they just said, then close warmly. Keep it short (1-2 sentences). Say goodbye and that you'll talk tomorrow."
     }
 
     instruction = stage_instructions.get(session.stage, "Continue the conversation naturally.")
@@ -362,44 +362,53 @@ async def check_and_send_milestone_message(channel: discord.DMChannel, user_id: 
 async def close_session(
     channel: discord.DMChannel,
     user: dict,
-    session: SessionState
+    session: SessionState,
+    skip_message: bool = False
 ) -> None:
-    """Close a session with appropriate closure message."""
+    """Close a session with appropriate closure message.
+
+    Args:
+        channel: The DM channel
+        user: User dict from database
+        session: The session state
+        skip_message: If True, skip sending closure message (LLM already sent one)
+    """
     user_id = user['user_id']
     personality = session.personality
 
-    # Build closure message
-    closure_parts = []
+    if not skip_message:
+        # Build closure message
+        closure_parts = []
 
-    # Get base closure
-    closure = get_closure(
-        personality=personality,
-        theme=session.theme_identified,
-        is_first_session=session.is_first_session,
-        is_short_session=session.exchange_count <= 2
-    )
+        # Get base closure
+        closure = get_closure(
+            personality=personality,
+            theme=session.theme_identified,
+            is_first_session=session.is_first_session,
+            is_short_session=session.exchange_count <= 2
+        )
 
-    # Generate same-session insight (if enough data)
-    from values import generate_session_insight
-    session_insight = generate_session_insight(session.extracted_beliefs)
-    if session_insight and not session.is_first_session:
-        closure_parts.append(session_insight)
+        # Generate same-session insight (if enough data)
+        from values import generate_session_insight
+        session_insight = generate_session_insight(session.extracted_beliefs)
+        if session_insight and not session.is_first_session:
+            closure_parts.append(session_insight)
 
-    # Show extracted beliefs (if any and not first session)
-    if session.extracted_beliefs and not session.is_first_session:
-        # Show up to 2 most recent beliefs
-        beliefs_to_show = session.extracted_beliefs[-2:]
-        statements = [b['statement'] for b in beliefs_to_show]
-        if len(statements) == 1:
-            closure_parts.append(f"Something worth remembering:\n*\"{statements[0]}\"*")
-        else:
-            closure_parts.append("A couple things worth remembering:")
-            for s in statements:
-                closure_parts.append(f"*\"{s}\"*")
+        # Show extracted beliefs (if any and not first session)
+        if session.extracted_beliefs and not session.is_first_session:
+            # Show up to 2 most recent beliefs
+            beliefs_to_show = session.extracted_beliefs[-2:]
+            statements = [b['statement'] for b in beliefs_to_show]
+            if len(statements) == 1:
+                closure_parts.append(f"Something worth remembering:\n*\"{statements[0]}\"*")
+            else:
+                closure_parts.append("A couple things worth remembering:")
+                for s in statements:
+                    closure_parts.append(f"*\"{s}\"*")
 
-    closure_parts.append(closure)
+        closure_parts.append(closure)
 
-    await channel.send("\n\n".join(closure_parts))
+        await channel.send("\n\n".join(closure_parts))
 
     # Update value profile
     try:
