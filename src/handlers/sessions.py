@@ -14,7 +14,8 @@ from db import (
     get_or_create_user, update_user,
     create_session as db_create_session, end_session as db_end_session,
     update_session, get_completed_session_count,
-    update_user_value_profile, create_value_snapshot
+    update_user_value_profile, create_value_snapshot,
+    add_belief
 )
 from prompts import get_opener, get_first_session_framing, get_closure
 from personality import build_session_system_prompt
@@ -124,17 +125,26 @@ async def process_session_message(
         )
 
         if extraction_result.beliefs:
-            # Convert ExtractedBelief objects to dicts for session storage
-            belief_dicts = [
-                {
-                    'statement': b.statement,
-                    'topics': b.topics,
-                    'confidence': b.confidence
-                }
-                for b in extraction_result.beliefs
-            ]
-            session.extracted_beliefs.extend(belief_dicts)
-            logger.info(f"Extracted {len(belief_dicts)} beliefs from user {user_id}")
+            # Save beliefs to database and store in session for display
+            for b in extraction_result.beliefs:
+                try:
+                    saved_belief = await add_belief(
+                        user_id=user_id,
+                        statement=b.statement,
+                        confidence=b.confidence,
+                        source_type=b.source_type,
+                        session_id=session.session_id,
+                        topics=b.topics
+                    )
+                    # Store in session for display at close
+                    session.extracted_beliefs.append({
+                        'statement': b.statement,
+                        'topics': b.topics,
+                        'confidence': b.confidence
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to save belief for user {user_id}: {e}")
+            logger.info(f"Extracted {len(extraction_result.beliefs)} beliefs from user {user_id}")
     except Exception as e:
         logger.error(f"Belief extraction failed for user {user_id}: {e}")
 
