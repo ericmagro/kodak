@@ -52,3 +52,46 @@ See commits b7c5483 through e4867da for complete fix history.
 
 ### Remaining Work
 See ROADMAP.md Phase 0 for outstanding items.
+
+## Jan 25, 2025 - First Real Session Testing (Night)
+
+### Session Flow Bugs Found
+
+First actual journaling session revealed multiple bugs in the conversation loop.
+
+**Bugs fixed (9 total):**
+
+1. **API 400 error on messages** — Session messages included `timestamp` field which Anthropic rejects
+   - Fix: Filter messages to just `role` and `content` before API calls
+
+2. **TypeError: await on sync function** — `create_message()` was synchronous, being awaited
+   - Fix: Created `create_message_async()` with `AsyncAnthropic` client
+
+3. **Off-by-one session ceiling** — Sessions closing after 3 exchanges instead of 4
+   - Fix: Changed `exchanges < ceiling - 1` to `exchanges < ceiling`
+
+4. **Disallowed column error** — `first_session_complete` not in ALLOWED_USER_COLUMNS
+   - Fix: Added to whitelist in db.py
+
+5. **Abrupt session endings** — CLOSE stage sent canned message without acknowledging user's last message
+   - Fix: LLM now generates closing response that acknowledges what user said
+
+6. **Beliefs not being saved** — `add_belief()` was never called, beliefs only in memory
+   - Fix: Added database save after extraction in process_session_message
+
+7. **Belief-value mappings not saved** — `add_belief_values()` was never called
+   - Fix: Added call to save belief→value mappings for value profile calculation
+
+8. **Attribute error on ExtractedBelief** — Code used `.themes` but class has `.topics`
+   - Fix: Changed to `.topics` in handlers/sessions.py and values.py
+
+9. **"Let's go" button in onboarding not working** — `handle_onboarding_complete` had placeholder `pass`
+   - Fix: Moved session-starting logic to callback in commands/journal.py where channel is available
+
+**Key insight:** The entire beliefs→values→themes pipeline was wired up but never actually called. Extraction happened but nothing was persisted. Now `/beliefs` and `/themes` populate correctly.
+
+**Verification:**
+- `/beliefs` shows extracted belief statements
+- `/themes` shows belief count and progress message ("7 things so far, 8 more reflections needed")
+- Sessions flow naturally with 4 exchanges before closing
+- "Let's go" button now starts first session immediately
