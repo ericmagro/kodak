@@ -7,9 +7,41 @@ A living document of where Kodak is going.
 
 ---
 
-## Current Priority: Ready for Launch! 🚀
+## Current Priority: Stability & Testing 🔧
 
-Phases 1, 2, 3, & 4 complete. Kodak is production-ready with polished UX, engaging first experience, and clean, maintainable code.
+Phases 1-4 complete, but deployment revealed critical runtime errors. Focusing on stability before launch.
+
+---
+
+## Phase 0: Critical Stability Fixes (In Progress)
+
+**Status:** Core import errors fixed. Remaining work on error handling and testing.
+
+### Completed (Jan 2025)
+- [x] **Import errors** — Fixed 15+ missing/misnamed function imports across codebase
+  - `get_session` → `get_active_session`
+  - `SchedulerManager` → `JournalScheduler` with correct constructor params
+  - Extractor, values, and db module import mismatches
+- [x] **Function signature mismatches** — Fixed parameter order/types
+  - OnboardingFlow constructor
+  - export_themes_for_sharing parameters
+  - parse_exported_themes type handling
+- [x] **Type errors** — Fixed ValueProfile dict/object access patterns
+- [x] **Invalid parameters** — Removed non-existent `include_topics` parameter
+- [x] **JSON encoding bugs** — Fixed double-encoding in theme exports
+
+### Remaining Work
+- [ ] **Exception handler double-response errors** — Fix interaction.response called twice in error paths
+  - Affects: All command files when exceptions occur after successful response
+  - Priority: Low (rare edge case, doesn't affect normal usage)
+  - Solution: Check `interaction.response.is_done()` before sending error messages
+- [ ] **Add basic import validation** — Prevent import errors from reaching production
+  - Add `python -m py_compile src/**/*.py` to CI/CD or pre-commit hook
+  - Consider basic smoke tests that import all modules
+- [ ] **Local testing workflow** — Document how to run bot locally before deploying
+  - Setup instructions with .env template
+  - Database initialization steps
+  - How to test Discord interactions locally
 
 ---
 
@@ -81,7 +113,36 @@ Make the first experience compelling and build trust in themes.
 
 ---
 
-## Phase 5: Post-Launch (After User Feedback)
+## Phase 5: Reliability & Observability
+
+Improvements for production monitoring and debugging.
+
+### Error Handling & Recovery
+- [ ] **Session state persistence** — Save active sessions to DB so Railway restarts don't lose context
+  - Store session messages and stage in database
+  - Restore on bot restart
+- [ ] **Graceful degradation** — Better fallbacks when LLM calls fail
+  - Cache last successful prompt for retry
+  - Simple acknowledgment responses when extraction fails
+- [ ] **Better error messages** — User-friendly errors with actionable next steps
+  - "Try again" vs "contact support" guidance
+  - Log correlation IDs for debugging
+
+### Monitoring & Debugging
+- [ ] **Command usage metrics** — Track which features are actually used
+  - Log command invocations (without PII)
+  - Session completion rates
+  - Onboarding drop-off points
+- [ ] **Error rate monitoring** — Alert on unusual error patterns
+  - Integration with Railway logs
+  - Slack/email alerts for critical errors
+- [ ] **Database backups** — Automated backup strategy
+  - Volume snapshots on Railway
+  - Export to S3/backup location
+
+---
+
+## Phase 6: Post-Launch Features (After User Feedback)
 
 Only build these after real users tell us what's missing.
 
