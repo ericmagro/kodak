@@ -24,7 +24,7 @@ async def register_beliefs_commands(bot):
         user = await get_or_create_user(user_id, username=interaction.user.name)
 
         try:
-            beliefs = await get_user_beliefs(user_id, include_topics=True)
+            beliefs = await get_user_beliefs(user_id)
 
             if not beliefs:
                 await interaction.response.send_message(
@@ -93,7 +93,7 @@ async def register_beliefs_commands(bot):
         user = await get_or_create_user(user_id, username=interaction.user.name)
 
         try:
-            beliefs = await get_user_beliefs(user_id, include_topics=True)
+            beliefs = await get_user_beliefs(user_id)
 
             if not beliefs:
                 await interaction.response.send_message(

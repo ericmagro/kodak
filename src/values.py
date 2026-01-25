@@ -838,11 +838,9 @@ def format_profile_comparison(profile1: ValueProfile, profile2: ValueProfile) ->
 
 async def export_themes_for_sharing(user_id: str, display_name: str) -> str:
     """Export themes for sharing (wrapper for create_export_data + export_to_json)."""
-    from db import get_user_value_profile, get_user_beliefs
+    from db import get_user_value_profile
     profile = await get_user_value_profile(user_id)
-    beliefs = await get_user_beliefs(user_id)
-    belief_count = len(beliefs) if beliefs else 0
-    export_data = create_export_data(profile, display_name, belief_count)
+    export_data = create_export_data(profile, display_name)
     return export_to_json(export_data)
 
 

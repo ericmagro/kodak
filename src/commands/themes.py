@@ -152,17 +152,21 @@ async def register_themes_commands(bot):
             last_profile = history[-1]
 
             # Find significant changes (>10% difference)
+            from values import ALL_VALUES
             changes = []
-            for value_name in first_profile.keys():
-                if value_name in last_profile:
-                    first_score = first_profile[value_name]
-                    last_score = last_profile[value_name]
+            for value_name in ALL_VALUES:
+                first_score_obj = first_profile.values.get(value_name)
+                last_score_obj = last_profile.values.get(value_name)
+
+                if first_score_obj and last_score_obj:
+                    first_score = first_score_obj.normalized_score
+                    last_score = last_score_obj.normalized_score
                     change = last_score - first_score
 
                     if abs(change) > 0.10:  # 10% threshold
                         direction = "↗️" if change > 0 else "↘️"
                         changes.append({
-                            'value': value_name.title(),
+                            'value': value_name.replace('_', ' ').title(),
                             'change': change,
                             'direction': direction,
                             'first': first_score,
@@ -222,10 +226,9 @@ async def register_themes_commands(bot):
 
             # Export themes
             display_name = interaction.user.display_name or interaction.user.name
-            export_data = await export_themes_for_sharing(user_id, display_name)
+            export_json = await export_themes_for_sharing(user_id, display_name)
 
-            # Create file
-            export_json = json.dumps(export_data, indent=2)
+            # Create file (export_json is already a formatted JSON string)
             filename = f"{display_name.replace(' ', '_').lower()}_themes.json"
 
             file = discord.File(
@@ -280,11 +283,11 @@ async def register_themes_commands(bot):
                 )
                 return
 
-            # Download and parse file
+            # Download file content
             file_content = await file.read()
             try:
-                other_data = json.loads(file_content.decode('utf-8'))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+                file_str = file_content.decode('utf-8')
+            except UnicodeDecodeError:
                 await interaction.response.send_message(
                     "❌ **Invalid file format**\n\n"
                     "This doesn't appear to be a valid Kodak themes file.",
@@ -292,8 +295,8 @@ async def register_themes_commands(bot):
                 )
                 return
 
-            # Parse and validate
-            other_profile = parse_exported_themes(other_data)
+            # Parse and validate (parse_exported_themes expects a JSON string)
+            other_profile = parse_exported_themes(file_str)
             if not other_profile:
                 await interaction.response.send_message(
                     "❌ **Invalid themes file**\n\n"

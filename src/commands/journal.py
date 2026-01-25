@@ -77,7 +77,12 @@ async def register_journal_commands(bot):
 
             # Get DM channel and start onboarding flow
             dm_channel = await interaction.user.create_dm()
-            flow = OnboardingFlow(dm_channel, user_id, on_complete=handle_onboarding_complete)
+
+            # Wrapper to add user_id to callback
+            async def _on_complete(personality: str, time: str, start_now: bool):
+                await handle_onboarding_complete(user_id, personality, time, start_now)
+
+            flow = OnboardingFlow(dm_channel, user_id, on_complete=_on_complete)
             await flow.start()
             return
 
