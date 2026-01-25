@@ -326,25 +326,95 @@ def aggregate_value_profile(
 
 
 # ============================================
+# SESSION INSIGHT
+# ============================================
+
+def generate_session_insight(extracted_beliefs: list[dict]) -> Optional[str]:
+    """
+    Generate an insight about themes from a single session.
+
+    Args:
+        extracted_beliefs: List of {'statement': str, 'themes': list[str]}
+
+    Returns:
+        A short insight string, or None if not enough data.
+    """
+    if not extracted_beliefs:
+        return None
+
+    # Count theme occurrences across all beliefs
+    theme_counts: dict[str, int] = {}
+    for belief in extracted_beliefs:
+        for theme in belief.get('themes', []):
+            theme_counts[theme] = theme_counts.get(theme, 0) + 1
+
+    if not theme_counts:
+        return None
+
+    # Find the most common theme(s)
+    max_count = max(theme_counts.values())
+
+    # Only generate insight if a theme appeared 2+ times
+    if max_count < 2:
+        return None
+
+    top_themes = [t for t, c in theme_counts.items() if c == max_count]
+    top_theme = top_themes[0]  # Take first if tie
+
+    # Get display name
+    theme_info = VALUE_DEFINITIONS.get(top_theme, {})
+    theme_name = theme_info.get("name", top_theme).lower()
+
+    # Generate insight based on count
+    if max_count >= 3:
+        return f"I noticed **{theme_name}** came up a lot in this session."
+    else:
+        return f"**{theme_name.capitalize()}** seemed to be on your mind today."
+
+
+# ============================================
 # NARRATIVE GENERATION
 # ============================================
 
-def generate_value_narrative(profile: ValueProfile) -> str:
+def generate_value_narrative(profile: ValueProfile, belief_count: int = 0) -> str:
     """
-    Generate a narrative description of a user's value profile.
+    Generate a narrative description of themes Kodak has noticed.
 
-    This is what users see when they run /values.
+    This is what users see when they run /themes.
     """
     top_values = profile.get_top_values(3)
     low_values = profile.get_low_values(2)
 
-    if not top_values or all(v.normalized_score == 0 for v in top_values):
-        return (
-            "I don't have enough information yet to describe your values.\n\n"
-            "Keep journaling, and patterns will emerge over time."
-        )
+    EMERGING_THRESHOLD = 15
+    STABLE_THRESHOLD = 50
 
-    lines = ["**What you seem to value most:**\n"]
+    # Not enough data yet
+    if not top_values or all(v.normalized_score == 0 for v in top_values):
+        if belief_count == 0:
+            return (
+                "No patterns yet — I need a few conversations first.\n\n"
+                "Try `/journal` to start a session."
+            )
+        else:
+            remaining = max(EMERGING_THRESHOLD - belief_count, 1)
+            return (
+                f"I've picked up on {belief_count} thing{'s' if belief_count != 1 else ''} "
+                f"so far, but it's too early to see patterns.\n\n"
+                f"About {remaining} more reflections and I should start seeing themes."
+            )
+
+    # Early data — show themes but flag as emerging
+    lines = []
+    if belief_count < EMERGING_THRESHOLD:
+        remaining = EMERGING_THRESHOLD - belief_count
+        lines.append(
+            f"**Emerging themes** (based on {belief_count} reflections — "
+            f"about {remaining} more until these stabilize):\n"
+        )
+    elif belief_count < STABLE_THRESHOLD:
+        lines.append(f"**Themes you keep coming back to** (based on {belief_count} reflections):\n")
+    else:
+        lines.append(f"**Themes you keep coming back to** (based on {belief_count} reflections):\n")
 
     for i, value in enumerate(top_values):
         if value.normalized_score < 0.3:
@@ -355,22 +425,28 @@ def generate_value_narrative(profile: ValueProfile) -> str:
 
         if i == 0:
             lines.append(
-                f"You often come back to themes of **{value.display_name.lower()}** — "
+                f"**{value.display_name}** has come up frequently — "
                 f"{description.lower()}.\n"
             )
         else:
             lines.append(
-                f"**{value.display_name}** also matters to you — {description.lower()}.\n"
+                f"**{value.display_name}** has also appeared often — {description.lower()}.\n"
             )
 
     # Add contrast with low values if there's enough data
     meaningful_lows = [v for v in low_values if v.normalized_score < 0.3 and v.belief_count > 0]
-    if meaningful_lows and top_values[0].normalized_score > 0.5:
+    if meaningful_lows and top_values[0].normalized_score > 0.5 and belief_count >= EMERGING_THRESHOLD:
         low_value = meaningful_lows[0]
         lines.append(
-            f"\nYou show less emphasis on **{low_value.display_name.lower()}** — "
-            f"this doesn't come up as often in what you share."
+            f"\n**{low_value.display_name}** has appeared less frequently — "
+            f"this theme hasn't come up as much in your reflections."
         )
+
+    # Add transparency disclaimer
+    if belief_count < STABLE_THRESHOLD:
+        lines.append(f"\n*These patterns are based on what you've shared so far. As we have more conversations, your theme profile will become clearer and more accurate.*")
+    else:
+        lines.append(f"\n*Based on {belief_count} reflections from our conversations together.*")
 
     return "\n".join(lines)
 
@@ -381,7 +457,7 @@ def generate_value_change_narrative(
     period_description: str = "the past month"
 ) -> Optional[str]:
     """
-    Generate narrative about how values have shifted.
+    Generate narrative about how themes have shifted.
 
     Returns None if no significant changes.
     """
@@ -403,7 +479,7 @@ def generate_value_change_narrative(
     if not changes:
         return None
 
-    lines = [f"**How your values are shifting ({period_description}):**\n"]
+    lines = [f"**How your themes are shifting ({period_description}):**\n"]
 
     # Sort by absolute change
     changes.sort(key=lambda x: abs(x[1]), reverse=True)
@@ -411,14 +487,16 @@ def generate_value_change_narrative(
     for value_name, diff, display_name in changes[:3]:
         if diff > 0:
             lines.append(
-                f"Your emphasis on **{display_name.lower()}** has increased. "
-                f"Recent entries mention these themes more than before.\n"
+                f"**{display_name}** has been appearing more often. "
+                f"Recent reflections have touched on this theme more than before.\n"
             )
         else:
             lines.append(
-                f"**{display_name}** has decreased slightly — "
+                f"**{display_name}** has been appearing less frequently — "
                 f"fewer mentions compared to before.\n"
             )
+
+    lines.append(f"\n*These shifts are based on comparing your recent reflections to earlier ones. Natural fluctuations in what you share can affect these patterns.*")
 
     return "\n".join(lines)
 
@@ -521,6 +599,8 @@ def generate_comparison_narrative(comparison: ValueComparison) -> str:
                 lines.append(f"- You emphasize **{name}** more")
             else:
                 lines.append(f"- They emphasize **{name}** more")
+
+    lines.append("\n*Comparison based on your respective theme profiles to date.*")
 
     return "\n".join(lines)
 
@@ -682,7 +762,7 @@ def generate_comparison_with_import_narrative(
     imported: ExportedValueProfile
 ) -> str:
     """
-    Generate comparison narrative between your profile and an imported one.
+    Generate comparison narrative between your themes and an imported one.
 
     This is the main function for /compare-file display.
     """
@@ -690,25 +770,24 @@ def generate_comparison_with_import_narrative(
     their_profile = imported_to_profile(imported)
     comparison = compare_value_profiles(your_profile, their_profile)
 
-    lines = [f"**Comparing your values with {imported.display_name}**\n"]
+    lines = [f"**Exploring themes with {imported.display_name}**\n"]
 
-    # Overall alignment
-    similarity_pct = int(comparison.overall_similarity * 100)
+    # Frame as exploration, not score
     if comparison.overall_similarity > 0.8:
-        lines.append(f"**{similarity_pct}% aligned** — You prioritize very similar things.\n")
+        lines.append("Very similar themes have emerged for both of you.\n")
     elif comparison.overall_similarity > 0.6:
-        lines.append(f"**{similarity_pct}% aligned** — You share core values with some differences.\n")
+        lines.append("Some common themes have emerged with some interesting differences.\n")
     elif comparison.overall_similarity > 0.4:
-        lines.append(f"**{similarity_pct}% aligned** — Some common ground, but different priorities.\n")
+        lines.append("Some shared themes appear, but with different focuses.\n")
     else:
-        lines.append(f"**{similarity_pct}% aligned** — Your priorities are quite different.\n")
+        lines.append("Quite different themes have emerged—could be interesting to explore why.\n")
 
-    # Shared top values
+    # Shared top themes
     if comparison.shared_top_values:
         shared_names = [VALUE_DEFINITIONS[v]["name"] for v in comparison.shared_top_values]
-        lines.append(f"**You both prioritize:** {', '.join(shared_names)}\n")
+        lines.append(f"**Shared themes:** {', '.join(shared_names)}\n")
 
-    # Your unique priorities
+    # Your unique themes
     your_top = set(v.value_name for v in your_profile.get_top_values(3) if v.normalized_score > 0.5)
     their_top = set(v for v, s in imported.values.items() if s > 0.5)
 
@@ -717,16 +796,32 @@ def generate_comparison_with_import_narrative(
 
     if your_unique:
         unique_names = [VALUE_DEFINITIONS[v]["name"] for v in your_unique]
-        lines.append(f"**You emphasize more:** {', '.join(unique_names)}")
+        lines.append(f"**Themes more prominent for you:** {', '.join(unique_names)}")
 
     if their_unique:
         unique_names = [VALUE_DEFINITIONS[v]["name"] for v in their_unique]
-        lines.append(f"**They emphasize more:** {', '.join(unique_names)}")
+        lines.append(f"**Themes more prominent for them:** {', '.join(unique_names)}")
+
+    # Questions to explore
+    if your_unique or their_unique:
+        lines.append("\n**Questions to explore together:**")
+        if your_unique:
+            theme = list(your_unique)[0]
+            theme_name = VALUE_DEFINITIONS[theme]["name"].lower()
+            lines.append(f"• Why does {theme_name} come up so much for you?")
+        if their_unique:
+            theme = list(their_unique)[0]
+            theme_name = VALUE_DEFINITIONS[theme]["name"].lower()
+            lines.append(f"• What draws them to {theme_name}?")
+        if comparison.complementary_values:
+            lines.append(f"• How do your different focuses complement each other?")
 
     # Show their shared beliefs if any
     if imported.included_beliefs:
-        lines.append(f"\n**Some beliefs they shared:**")
+        lines.append(f"\n**Some things they shared:**")
         for belief in imported.included_beliefs[:3]:
             lines.append(f"• *\"{belief[:80]}{'...' if len(belief) > 80 else ''}\"*")
+
+    lines.append("\n*This comparison is based on what you've each shared in your journaling so far. Theme profiles develop over time, so differences might reflect varying amounts of reflection rather than fundamental differences.*")
 
     return "\n".join(lines)

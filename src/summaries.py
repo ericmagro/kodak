@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import anthropic
 
+from client import create_message
 from db import (
     get_sessions_in_range, get_beliefs_from_sessions, get_topics_frequency,
     get_user_value_profile, get_value_profile_at_date, store_summary,
@@ -15,28 +16,6 @@ from db import (
 from values import ALL_VALUES
 
 logger = logging.getLogger('kodak')
-
-# Initialize Anthropic client
-_client = None
-
-
-def init_client(api_key: str) -> bool:
-    """Initialize the Anthropic client. Returns True if successful."""
-    global _client
-    if _client is not None:
-        return True  # Already initialized
-    if not api_key:
-        logger.error("No API key provided for summaries client")
-        return False
-    _client = anthropic.Anthropic(api_key=api_key)
-    return True
-
-
-def get_client():
-    """Get the initialized client, raising if not available."""
-    if _client is None:
-        raise ValueError("Anthropic client not initialized. Call init_client first.")
-    return _client
 
 
 def get_user_timezone(user: dict) -> pytz.BaseTzInfo:
@@ -259,29 +238,23 @@ Example: ["Highlight one.", "Highlight two.", "Highlight three."]"""
 
 async def generate_summary_narrative(data: dict) -> tuple[str, list[str]]:
     """Generate the summary narrative and highlights using Claude."""
-    client = get_client()
-
     # Generate main narrative
     narrative_prompt = generate_summary_prompt(data)
 
-    narrative_response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": narrative_prompt}]
+    narrative = create_message(
+        messages=[{"role": "user", "content": narrative_prompt}],
+        max_tokens=1000
     )
-    narrative = narrative_response.content[0].text
 
     # Generate highlights (if not a quiet week)
     highlights = []
     highlights_prompt = generate_highlights_prompt(data)
     if highlights_prompt:
         try:
-            highlights_response = get_client().messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=300,
-                messages=[{"role": "user", "content": highlights_prompt}]
-            )
-            highlights_text = highlights_response.content[0].text.strip()
+            highlights_text = create_message(
+                messages=[{"role": "user", "content": highlights_prompt}],
+                max_tokens=300
+            ).strip()
             # Parse JSON array
             if highlights_text.startswith('['):
                 highlights = json.loads(highlights_text)

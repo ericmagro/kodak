@@ -176,6 +176,101 @@ class TimeInputModal(ui.Modal, title="Set Check-in Time"):
         await self.on_select(interaction, parsed)
 
 
+class SampleSessionView(ui.View):
+    """Show a sample session to demonstrate what journaling looks like."""
+
+    def __init__(self, user_id: str, on_continue: Callable):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.on_continue = on_continue
+        self.example_index = 0
+
+    @ui.button(label="Got it! Let's set this up", style=discord.ButtonStyle.primary, emoji="👍")
+    async def continue_button(self, interaction: discord.Interaction, button: ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your onboarding!", ephemeral=True)
+            return
+        await self.on_continue(interaction)
+
+    @ui.button(label="Show me another example", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def another_example(self, interaction: discord.Interaction, button: ui.Button):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your onboarding!", ephemeral=True)
+            return
+
+        # Cycle through examples
+        self.example_index = (self.example_index + 1) % 3
+        sample_sessions = [
+            self._get_work_stress_sample(),
+            self._get_relationship_sample(),
+            self._get_goals_sample()
+        ]
+
+        new_sample = sample_sessions[self.example_index]
+        await interaction.response.edit_message(content=new_sample, view=self)
+
+    def _get_work_stress_sample(self):
+        return """**Here's what a typical session looks like:**
+
+> **Kodak:** What's been sitting with you today?
+>
+> **You:** Work stuff. My manager announced a reorg and I might have to move teams. I'm not even sure I'm upset about it but I can't stop thinking about it.
+>
+> **Kodak:** What is it about the uncertainty that's hard to let go of?
+>
+> **You:** I think it's that I finally felt like I knew what I was doing. Now I might have to start over proving myself again.
+>
+> **Kodak:** That's interesting—it sounds less about the team and more about losing a sense of competence you'd built up. Is that fair?
+>
+> **You:** Yeah, actually. I hadn't thought of it that way.
+>
+> **Kodak:** Something worth remembering: *"I value feeling competent and established in my work"*
+>
+> Thanks for reflecting with me tonight.
+
+Notice how I ask follow-up questions to understand what really matters to you, then capture insights that emerge naturally."""
+
+    def _get_relationship_sample(self):
+        return """**Here's what a typical session looks like:**
+
+> **Kodak:** What's on your mind tonight?
+>
+> **You:** Had dinner with my sister. She's going through a rough divorce and I want to help but don't know how.
+>
+> **Kodak:** What feels hard about not knowing how to help?
+>
+> **You:** I hate seeing people I care about struggle when I could do something. Even if it's not really my problem to solve.
+>
+> **Kodak:** Sounds like you feel responsible for the wellbeing of people close to you. What drives that?
+>
+> **You:** I guess I've always been the one people come to. It feels wrong to just... not help.
+>
+> **Kodak:** Something worth remembering: *"I feel responsible for helping people I care about, even when it's not my problem to solve"*
+
+See how the conversation reveals what matters to you through natural reflection, not surveys about your values."""
+
+    def _get_goals_sample(self):
+        return """**Here's what a typical session looks like:**
+
+> **Kodak:** How was your day?
+>
+> **You:** Pretty good. Made progress on my side project for the first time in weeks.
+>
+> **Kodak:** What made today different?
+>
+> **You:** I finally just sat down and worked on it instead of overthinking the plan. Felt so good to actually build something.
+>
+> **Kodak:** What is it about building that feels good?
+>
+> **You:** I love that moment when an idea becomes real. Like, I can imagine something and then make it exist.
+>
+> **Kodak:** Something worth remembering: *"I'm energized by turning ideas into reality through building"*
+>
+> Sweet dreams, creator.
+
+The patterns I notice become your theme profile over time—no personality tests needed, just honest conversation."""
+
+
 class FirstSessionPromptView(ui.View):
     """Ask if user wants to start first session now."""
 
@@ -286,8 +381,8 @@ class OnboardingFlow:
         await interaction.response.edit_message(content=preview, view=view)
 
     async def _on_personality_confirmed(self, interaction: discord.Interaction):
-        """Handle personality confirmation, move to time selection."""
-        await self._show_time_selection(interaction)
+        """Handle personality confirmation, show sample session before time selection."""
+        await self._show_sample_session(interaction)
 
     async def _on_see_another(self, interaction: discord.Interaction):
         """Show next personality preview."""
@@ -295,6 +390,19 @@ class OnboardingFlow:
         next_key = PRESET_ORDER[self.state.preview_index]
         self.state.selected_personality = next_key
         await self._show_personality_preview(interaction, next_key)
+
+    async def _show_sample_session(self, interaction: discord.Interaction):
+        """Show a sample session to demonstrate what journaling looks like."""
+        view = SampleSessionView(self.user_id, self._on_sample_session_continue)
+
+        # Start with the work stress example
+        sample_content = view._get_work_stress_sample()
+
+        await interaction.response.edit_message(content=sample_content, view=view)
+
+    async def _on_sample_session_continue(self, interaction: discord.Interaction):
+        """Handle continuation from sample session to time selection."""
+        await self._show_time_selection(interaction)
 
     async def _show_time_selection(self, interaction: discord.Interaction):
         """Show time selection UI."""

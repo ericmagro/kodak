@@ -45,7 +45,8 @@ class SessionState:
     pattern_surfaced_this_session: bool = False
 
     # Extracted beliefs (to show at close)
-    extracted_beliefs: list[str] = field(default_factory=list)
+    # Each entry: {'statement': str, 'themes': list[str]}
+    extracted_beliefs: list[dict] = field(default_factory=list)
 
     # Message history for this session
     messages: list[dict] = field(default_factory=list)

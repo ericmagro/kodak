@@ -20,7 +20,8 @@ logger = logging.getLogger('kodak')
 ALLOWED_USER_COLUMNS = {
     'username', 'personality_preset', 'prompt_time', 'prompt_depth', 'timezone',
     'onboarding_complete', 'tracking_paused', 'last_prompt_sent', 'last_prompt_responded',
-    'prompts_ignored', 'last_active', 'last_prompt_date', 'updated_at'
+    'prompts_ignored', 'last_active', 'last_prompt_date', 'updated_at',
+    'last_weekly_summary_prompt'
 }
 
 ALLOWED_SESSION_COLUMNS = {
@@ -43,7 +44,27 @@ async def init_db():
         with open(SCHEMA_PATH) as f:
             await db.executescript(f.read())
         await db.commit()
+
+        # Migrations for existing databases
+        await _run_migrations(db)
+
         logger.info(f"Database initialized at {DB_PATH}")
+
+
+async def _run_migrations(db):
+    """Run schema migrations for existing databases."""
+    cursor = await db.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in await cursor.fetchall()]
+
+    if 'last_opener' not in columns:
+        await db.execute("ALTER TABLE users ADD COLUMN last_opener TEXT")
+        await db.commit()
+        logger.info("Migration: added last_opener column to users")
+
+    if 'last_weekly_summary_prompt' not in columns:
+        await db.execute("ALTER TABLE users ADD COLUMN last_weekly_summary_prompt TEXT")
+        await db.commit()
+        logger.info("Migration: added last_weekly_summary_prompt column to users")
 
 
 # ============================================
@@ -366,6 +387,18 @@ async def get_recent_openers(user_id: str, limit: int = 5) -> list[str]:
         return [row[0] for row in rows]
 
 
+async def get_completed_session_count(user_id: str) -> int:
+    """Get count of completed sessions for a user."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM journal_sessions
+               WHERE user_id = ? AND ended_at IS NOT NULL""",
+            (user_id,)
+        )
+        result = await cursor.fetchone()
+        return result[0] if result else 0
+
+
 # ============================================
 # BELIEFS
 # ============================================
@@ -449,6 +482,7 @@ async def get_belief(belief_id: str) -> Optional[dict]:
 async def get_user_beliefs(
     user_id: str,
     include_deleted: bool = False,
+    include_values: bool = False,
     limit: int = None
 ) -> list[dict]:
     """Get all beliefs for a user."""
@@ -476,6 +510,14 @@ async def get_user_beliefs(
                 (belief['id'],)
             )
             belief['topics'] = [r['topic'] for r in await cursor.fetchall()]
+
+            # Optionally fetch values for each belief
+            if include_values:
+                cursor = await db.execute(
+                    "SELECT value_name, weight FROM belief_values WHERE belief_id = ?",
+                    (belief['id'],)
+                )
+                belief['values'] = [dict(r) for r in await cursor.fetchall()]
 
         return beliefs
 

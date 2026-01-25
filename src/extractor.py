@@ -9,20 +9,10 @@ import anthropic
 from typing import Optional
 from dataclasses import dataclass
 
+from client import create_message
 from values import ALL_VALUES, VALUE_DEFINITIONS
 
 logger = logging.getLogger('kodak')
-
-# Initialize client lazily
-_client = None
-
-
-def get_client():
-    """Lazy-load Anthropic client."""
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic()
-    return _client
 
 
 # ============================================
@@ -171,14 +161,10 @@ Message to analyze:
 \"\"\"{message}\"\"\""""
 
     try:
-        client = get_client()
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": full_prompt}]
+        content = create_message(
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=1024
         )
-
-        content = response.content[0].text
 
         # Handle markdown code blocks
         if content.startswith("```"):
@@ -307,14 +293,11 @@ Return JSON only:
 }}"""
 
     try:
-        client = get_client()
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}]
+        content = create_message(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=256
         )
 
-        content = response.content[0].text
         if content.startswith("```"):
             content = content.split("```")[1]
             if content.startswith("json"):

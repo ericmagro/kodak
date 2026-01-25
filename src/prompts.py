@@ -57,23 +57,21 @@ OPENER_POOLS = {
     ],
 }
 
-# Track last used opener per user to avoid repetition
-_last_opener: dict[str, str] = {}
+def get_opener(personality: str, last_opener: str = None) -> str:
+    """Get a random opener for the personality, avoiding the last one used.
 
-
-def get_opener(personality: str, user_id: str) -> str:
-    """Get a random opener for the personality, avoiding the last one used."""
+    Args:
+        personality: The personality preset key
+        last_opener: The last opener used (from DB), to avoid repetition
+    """
     pool = OPENER_POOLS.get(personality, OPENER_POOLS["best_friend"])
-    last = _last_opener.get(user_id)
 
     # Filter out last used opener
-    available = [o for o in pool if o != last]
+    available = [o for o in pool if o != last_opener] if last_opener else pool
     if not available:
         available = pool
 
-    opener = random.choice(available)
-    _last_opener[user_id] = opener
-    return opener
+    return random.choice(available)
 
 
 # ============================================
