@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 # Database and core imports
 from db import init_db, get_or_create_user, update_user
-from session import get_session
+from session import get_active_session
 
 # Handler imports
 from handlers.sessions import (
@@ -107,10 +107,10 @@ async def on_message(message: discord.Message):
     await update_user(user_id, last_active=datetime.now().isoformat())
 
     # Log user message (without content for privacy)
-    log_user_action(logger, "message_received", user_id, has_active_session=bool(get_session(user_id)))
+    log_user_action(logger, "message_received", user_id, has_active_session=bool(get_active_session(user_id)))
 
     # Check if user has an active session
-    if get_session(user_id):
+    if get_active_session(user_id):
         # Process as part of ongoing session
         await process_session_message(message.channel, user, message.content)
     else:
