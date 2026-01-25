@@ -6,9 +6,9 @@ import logging
 import discord
 from discord import app_commands
 
-from db import get_or_create_user, get_user_beliefs
+from db import get_or_create_user, get_user_beliefs, get_user_value_profile, get_value_profile_history
 from values import (
-    get_user_value_profile, get_value_profile_history, generate_value_narrative,
+    generate_value_narrative,
     format_profile_comparison, export_themes_for_sharing, parse_exported_themes
 )
 

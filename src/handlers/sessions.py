@@ -181,12 +181,8 @@ async def generate_session_response(session: SessionState, user_message: str, fa
     instruction = stage_instructions.get(session.stage, "Continue the conversation naturally.")
     full_system = f"{system_prompt}\n\n{instruction}"
 
-    # Build conversation history
-    messages = []
-    for exchange in session.conversation_history[-3:]:  # Last 3 exchanges for context
-        messages.append({"role": "user", "content": exchange.user_message})
-        if exchange.bot_response:
-            messages.append({"role": "assistant", "content": exchange.bot_response})
+    # Build conversation history from session messages
+    messages = session.get_recent_context(6)  # Get last 6 messages (3 exchanges)
 
     # Add current message
     messages.append({"role": "user", "content": user_message})
@@ -199,8 +195,7 @@ async def generate_session_response(session: SessionState, user_message: str, fa
         )
 
         # Store bot's response in session
-        if session.conversation_history:
-            session.conversation_history[-1].bot_response = response
+        session.add_bot_message(response)
 
         return response
 

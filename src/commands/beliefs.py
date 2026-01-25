@@ -6,8 +6,9 @@ from discord import app_commands
 
 from db import (
     get_or_create_user, get_user_beliefs, get_belief_by_id,
-    update_belief, delete_belief, restore_last_deleted_belief,
-    get_belief_evolution, get_recently_changed_beliefs, find_belief_tensions
+    update_belief_confidence, update_belief_importance,
+    soft_delete_belief, restore_last_deleted_belief,
+    get_belief_history, get_recent_changes, get_all_tensions
 )
 
 logger = logging.getLogger('kodak')
@@ -265,7 +266,7 @@ async def register_beliefs_commands(bot):
 
                 @discord.ui.button(label="Yes, delete it", style=discord.ButtonStyle.danger)
                 async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
-                    await delete_belief(user_id, id)
+                    await soft_delete_belief(id, user_id)
                     await interaction.response.send_message(
                         f"✅ **Belief deleted**\n\n"
                         f"The belief has been removed. You can restore it with `/undo` if you change your mind.",
@@ -353,7 +354,7 @@ async def register_beliefs_commands(bot):
             # Convert to 0-1 scale
             confidence_score = level / 5.0
 
-            await update_belief(user_id, id, confidence=confidence_score)
+            await update_belief_confidence(id, user_id, confidence_score, trigger="user_adjustment")
 
             confidence_labels = {1: "very unsure", 2: "somewhat unsure", 3: "neutral", 4: "somewhat confident", 5: "very confident"}
 
@@ -400,7 +401,7 @@ async def register_beliefs_commands(bot):
                 )
                 return
 
-            await update_belief(user_id, id, importance=importance)
+            await update_belief_importance(id, user_id, importance)
 
             importance_labels = {1: "not important", 2: "somewhat important", 3: "moderately important", 4: "important", 5: "very important"}
 
@@ -494,7 +495,7 @@ async def register_beliefs_commands(bot):
                 )
                 return
 
-            history = await get_belief_evolution(belief['id'])
+            history = await get_belief_history(belief['id'])
 
             response = f"**📈 Belief Evolution**\n\n"
             response += f"*\"{belief['statement']}\"*\n\n"
@@ -544,7 +545,7 @@ async def register_beliefs_commands(bot):
         user = await get_or_create_user(user_id, username=interaction.user.name)
 
         try:
-            changes = await get_recently_changed_beliefs(user_id, days=30)
+            changes = await get_recent_changes(user_id, days=30)
 
             if not changes:
                 await interaction.response.send_message(
@@ -596,7 +597,7 @@ async def register_beliefs_commands(bot):
         user = await get_or_create_user(user_id, username=interaction.user.name)
 
         try:
-            tensions = await find_belief_tensions(user_id)
+            tensions = await get_all_tensions(user_id)
 
             if not tensions:
                 await interaction.response.send_message(

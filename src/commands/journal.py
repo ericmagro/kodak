@@ -7,10 +7,10 @@ from datetime import datetime
 
 from db import get_or_create_user, update_user
 from handlers.sessions import start_journal_session, handle_onboarding_complete
-from onboarding import OnboardingFlow, quick_setup
+from onboarding import OnboardingFlow
 from personality import PRESETS, PRESET_ORDER
 from session import get_active_session
-from scheduler import parse_time
+from scheduler import parse_time_input
 
 logger = logging.getLogger('kodak')
 
@@ -26,7 +26,7 @@ async def register_journal_commands(bot):
         user = await get_or_create_user(user_id, username=interaction.user.name)
 
         try:
-            parsed_time = parse_time(time)
+            parsed_time = parse_time_input(time)
             await update_user(user_id, prompt_time=parsed_time)
 
             await interaction.response.send_message(

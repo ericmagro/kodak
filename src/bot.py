@@ -9,7 +9,11 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
 # Database and core imports
-from db import init_db, get_or_create_user, update_user
+from db import (
+    init_db, get_or_create_user, update_user,
+    get_users_eligible_for_prompt, get_users_with_missed_prompts,
+    get_users_needing_reengagement, mark_prompt_sent
+)
 from session import get_active_session
 
 # Handler imports
@@ -27,7 +31,7 @@ from commands.settings import register_settings_commands
 from commands.help import register_help_commands
 
 # Scheduler
-from scheduler import SchedulerManager
+from scheduler import JournalScheduler
 
 # Health server
 from health_server import start_health_server
@@ -84,7 +88,15 @@ async def on_ready():
         logger.info("Commands synced successfully")
 
         # Start scheduler
-        scheduler = SchedulerManager(bot, send_scheduled_prompt, send_catch_up_prompt, send_reengagement_prompt)
+        scheduler = JournalScheduler(
+            get_users_eligible_for_prompt,
+            get_users_with_missed_prompts,
+            get_users_needing_reengagement,
+            send_scheduled_prompt,
+            send_catch_up_prompt,
+            send_reengagement_prompt,
+            mark_prompt_sent
+        )
         await scheduler.start()
 
         logger.info("Ready!")

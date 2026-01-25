@@ -825,3 +825,30 @@ def generate_comparison_with_import_narrative(
     lines.append("\n*This comparison is based on what you've each shared in your journaling so far. Theme profiles develop over time, so differences might reflect varying amounts of reflection rather than fundamental differences.*")
 
     return "\n".join(lines)
+
+# ============================================
+# CONVENIENCE WRAPPERS FOR COMMAND MODULES
+# ============================================
+
+def format_profile_comparison(profile1: ValueProfile, profile2: ValueProfile) -> str:
+    """Format a comparison between two value profiles (wrapper for generate_comparison_narrative)."""
+    comparison = compare_value_profiles(profile1, profile2)
+    return generate_comparison_narrative(comparison)
+
+
+async def export_themes_for_sharing(user_id: str, display_name: str) -> str:
+    """Export themes for sharing (wrapper for create_export_data + export_to_json)."""
+    from db import get_user_value_profile, get_user_beliefs
+    profile = await get_user_value_profile(user_id)
+    beliefs = await get_user_beliefs(user_id)
+    belief_count = len(beliefs) if beliefs else 0
+    export_data = create_export_data(profile, display_name, belief_count)
+    return export_to_json(export_data)
+
+
+def parse_exported_themes(json_str: str) -> Optional[ValueProfile]:
+    """Parse exported themes (wrapper for parse_import_data + imported_to_profile)."""
+    imported = parse_import_data(json_str)
+    if imported:
+        return imported_to_profile(imported)
+    return None

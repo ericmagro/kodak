@@ -479,6 +479,14 @@ async def get_belief(belief_id: str) -> Optional[dict]:
         return belief
 
 
+async def get_belief_by_id(user_id: str, belief_id: str) -> Optional[dict]:
+    """Get a belief by ID, verifying it belongs to the user."""
+    belief = await get_belief(belief_id)
+    if belief and belief.get('user_id') == user_id:
+        return belief
+    return None
+
+
 async def get_user_beliefs(
     user_id: str,
     include_deleted: bool = False,
@@ -665,6 +673,15 @@ async def restore_belief(belief_id: str, user_id: str) -> bool:
         )
         await db.commit()
         return cursor.rowcount > 0
+
+
+async def restore_last_deleted_belief(user_id: str) -> Optional[dict]:
+    """Get and restore the most recently deleted belief for a user."""
+    last_deleted = await get_last_deleted_belief(user_id)
+    if last_deleted:
+        await restore_belief(last_deleted['id'], user_id)
+        return last_deleted
+    return None
 
 
 # ============================================
@@ -971,6 +988,33 @@ async def get_value_snapshot(user_id: str, days_ago: int = 30) -> Optional[Value
             scores=scores,
             last_updated=row['snapshot_date']
         )
+
+
+async def get_value_profile_history(user_id: str, days: int = 30) -> list[ValueProfile]:
+    """Get historical value profile snapshots for a user."""
+    from datetime import datetime, timedelta
+    cutoff_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT * FROM value_snapshots
+               WHERE user_id = ? AND snapshot_date >= ?
+               ORDER BY snapshot_date ASC""",
+            (user_id, cutoff_date)
+        )
+        rows = await cursor.fetchall()
+
+        profiles = []
+        for row in rows:
+            values_data = json.loads(row['values_json'])
+            profile = ValueProfile(
+                values={k: ValueScore(**v) for k, v in values_data.items()},
+                last_updated=row['snapshot_date']
+            )
+            profiles.append(profile)
+
+        return profiles
 
 
 # ============================================
