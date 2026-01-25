@@ -15,7 +15,7 @@ from db import (
     create_session as db_create_session, end_session as db_end_session,
     update_session, get_completed_session_count,
     update_user_value_profile, create_value_snapshot,
-    add_belief
+    add_belief, add_belief_values
 )
 from prompts import get_opener, get_first_session_framing, get_closure
 from personality import build_session_system_prompt
@@ -136,6 +136,13 @@ async def process_session_message(
                         session_id=session.session_id,
                         topics=b.topics
                     )
+                    # Save belief-value mappings for value profile calculation
+                    if b.values and saved_belief:
+                        value_tuples = [
+                            (v.name, v.weight, v.mapping_confidence)
+                            for v in b.values
+                        ]
+                        await add_belief_values(saved_belief['id'], value_tuples)
                     # Store in session for display at close
                     session.extracted_beliefs.append({
                         'statement': b.statement,
