@@ -20,7 +20,7 @@ logger = logging.getLogger('kodak')
 ALLOWED_USER_COLUMNS = {
     'username', 'personality_preset', 'prompt_time', 'prompt_depth', 'timezone',
     'onboarding_complete', 'tracking_paused', 'last_prompt_sent', 'last_prompt_responded',
-    'prompts_ignored', 'last_active', 'last_prompt_date', 'updated_at',
+    'prompts_ignored', 'last_active', 'last_prompt_date', 'last_opener', 'updated_at',
     'last_weekly_summary_prompt'
 }
 
