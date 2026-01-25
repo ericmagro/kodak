@@ -9,7 +9,7 @@ from db import get_or_create_user, update_user
 from handlers.sessions import start_journal_session, handle_onboarding_complete
 from onboarding import OnboardingFlow, quick_setup
 from personality import PRESETS, PRESET_ORDER
-from session import get_session
+from session import get_active_session
 from scheduler import parse_time
 
 logger = logging.getLogger('kodak')
@@ -81,7 +81,7 @@ async def register_journal_commands(bot):
             return
 
         # Check for active session
-        if get_session(user_id):
+        if get_active_session(user_id):
             await interaction.response.send_message(
                 "You already have an active session running. Just keep talking to me!",
                 ephemeral=True

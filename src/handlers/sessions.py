@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from structured_logging import log_session_event, log_user_action, log_error_with_context
 
-from session import SessionState, SessionStage, create_session, end_session, get_session
+from session import SessionState, SessionStage, create_session, end_session, get_active_session, determine_next_stage
 from db import (
     get_or_create_user, update_user,
     create_session as db_create_session, end_session as db_end_session,
@@ -93,7 +93,7 @@ async def process_session_message(
     user_id = user['user_id']
 
     # Get active session
-    session = get_session(user_id)
+    session = get_active_session(user_id)
     if not session:
         logger.warning(f"No active session for user {user_id}")
         await channel.send("I don't think we have an active session. Use `/journal` to start one!")
@@ -122,13 +122,7 @@ async def process_session_message(
         logger.error(f"Belief extraction failed for user {user_id}: {e}")
 
     # Determine next stage
-    from session import should_continue_session
-    next_stage = session.stage
-    if should_continue_session(session):
-        next_stage = SessionStage.PROBE
-    else:
-        next_stage = SessionStage.CLOSE
-
+    next_stage = determine_next_stage(session)
     session.stage = next_stage
 
     # Check if we should close
