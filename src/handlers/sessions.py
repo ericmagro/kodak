@@ -461,6 +461,7 @@ async def handle_onboarding_complete(
     user_id: str,
     personality: str,
     time: str,
+    timezone: str,
     start_now: bool = False
 ):
     """Complete the onboarding process for a user."""
@@ -469,10 +470,11 @@ async def handle_onboarding_complete(
         onboarding_complete=1,
         personality_preset=personality,
         prompt_time=time,
+        timezone=timezone,
         last_active=datetime.now().isoformat()
     )
 
-    logger.info(f"User {user_id} completed onboarding: {personality}, {time}")
+    logger.info(f"User {user_id} completed onboarding: {personality}, {time} {timezone}")
 
     # Start first session if requested
     if start_now:

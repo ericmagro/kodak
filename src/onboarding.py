@@ -22,6 +22,7 @@ class OnboardingState:
         self.user_id = user_id
         self.selected_personality: Optional[str] = None
         self.selected_time: Optional[str] = None
+        self.selected_timezone: Optional[str] = None
         self.preview_index: int = 0  # Which personality they're previewing
 
 
@@ -176,6 +177,52 @@ class TimeInputModal(ui.Modal, title="Set Check-in Time"):
         await self.on_select(interaction, parsed)
 
 
+class TimezoneSelectView(ui.View):
+    """Select timezone for scheduled prompts."""
+
+    def __init__(self, user_id: str, on_select: Callable[[discord.Interaction, str], Awaitable[None]]):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.on_select = on_select
+
+        # Add timezone selector
+        self.add_item(TimezoneDropdown(user_id, on_select))
+
+
+class TimezoneDropdown(ui.Select):
+    """Dropdown for selecting timezone."""
+
+    def __init__(self, user_id: str, on_select: Callable[[discord.Interaction, str], Awaitable[None]]):
+        self.user_id = user_id
+        self.on_select_callback = on_select
+
+        # Common US timezones + UTC
+        options = [
+            discord.SelectOption(label="Eastern Time (EST/EDT)", value="America/New_York", emoji="🗽"),
+            discord.SelectOption(label="Central Time (CST/CDT)", value="America/Chicago", emoji="🌆"),
+            discord.SelectOption(label="Mountain Time (MST/MDT)", value="America/Denver", emoji="🏔️"),
+            discord.SelectOption(label="Pacific Time (PST/PDT)", value="America/Los_Angeles", emoji="🌉"),
+            discord.SelectOption(label="Alaska Time (AKST/AKDT)", value="America/Anchorage", emoji="❄️"),
+            discord.SelectOption(label="Hawaii Time (HST)", value="Pacific/Honolulu", emoji="🌺"),
+            discord.SelectOption(label="UTC (Universal Time)", value="UTC", emoji="🌍"),
+        ]
+
+        super().__init__(
+            placeholder="Select your timezone...",
+            options=options,
+            min_values=1,
+            max_values=1
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("This isn't your onboarding!", ephemeral=True)
+            return
+
+        selected_tz = self.values[0]
+        await self.on_select_callback(interaction, selected_tz)
+
+
 class SampleSessionView(ui.View):
     """Show a sample session to demonstrate what journaling looks like."""
 
@@ -319,7 +366,7 @@ class OnboardingFlow:
         self,
         channel: discord.DMChannel,
         user_id: str,
-        on_complete: Callable[[str, str, bool], Awaitable[None]]
+        on_complete: Callable[[str, str, str, bool], Awaitable[None]]
     ):
         """
         Initialize onboarding flow.
@@ -327,7 +374,7 @@ class OnboardingFlow:
         Args:
             channel: The DM channel to send messages to
             user_id: The user's Discord ID
-            on_complete: Callback when done (personality, time, start_now)
+            on_complete: Callback when done (personality, time, timezone, start_now)
         """
         self.channel = channel
         self.user_id = user_id
@@ -415,13 +462,40 @@ class OnboardingFlow:
         await interaction.response.edit_message(content=message, view=view)
 
     async def _on_time_selected(self, interaction: discord.Interaction, time_24h: str):
-        """Handle time selection, show final confirmation."""
+        """Handle time selection, show timezone selection."""
         self.state.selected_time = time_24h
-        display_time = format_time_display(time_24h)
+        await self._show_timezone_selection(interaction)
+
+    async def _show_timezone_selection(self, interaction: discord.Interaction):
+        """Show timezone selection UI."""
+        message = (
+            "**What timezone are you in?**\n\n"
+            "This ensures I message you at the right local time."
+        )
+
+        view = TimezoneSelectView(self.user_id, self._on_timezone_selected)
+        await interaction.response.edit_message(content=message, view=view)
+
+    async def _on_timezone_selected(self, interaction: discord.Interaction, timezone: str):
+        """Handle timezone selection, show final confirmation."""
+        self.state.selected_timezone = timezone
+        display_time = format_time_display(self.state.selected_time)
+
+        # Get timezone display name
+        tz_names = {
+            "America/New_York": "Eastern Time",
+            "America/Chicago": "Central Time",
+            "America/Denver": "Mountain Time",
+            "America/Los_Angeles": "Pacific Time",
+            "America/Anchorage": "Alaska Time",
+            "Pacific/Honolulu": "Hawaii Time",
+            "UTC": "UTC"
+        }
+        tz_display = tz_names.get(timezone, timezone)
 
         message = (
             f"**You're all set!**\n\n"
-            f"I'll message you at **{display_time}** each day.\n\n"
+            f"I'll message you at **{display_time} {tz_display}** each day.\n\n"
             f"Or just message me anytime you want to reflect.\n\n"
             f"Ready for your first session?"
         )
@@ -438,22 +512,36 @@ class OnboardingFlow:
         """User wants to start first session immediately."""
         personality = self.state.selected_personality or "best_friend"
         time = self.state.selected_time or "20:00"
+        timezone = self.state.selected_timezone or "UTC"
 
         clear_onboarding_state(self.user_id)
-        await self.on_complete(personality, time, True)
+        await self.on_complete(personality, time, timezone, True)
 
     async def _on_wait(self):
         """User wants to wait for scheduled prompt."""
         personality = self.state.selected_personality or "best_friend"
         time = self.state.selected_time or "20:00"
+        timezone = self.state.selected_timezone or "UTC"
         display_time = format_time_display(time)
 
+        # Get timezone display name
+        tz_names = {
+            "America/New_York": "Eastern",
+            "America/Chicago": "Central",
+            "America/Denver": "Mountain",
+            "America/Los_Angeles": "Pacific",
+            "America/Anchorage": "Alaska",
+            "Pacific/Honolulu": "Hawaii",
+            "UTC": "UTC"
+        }
+        tz_display = tz_names.get(timezone, timezone)
+
         await self.channel.send(
-            f"Sounds good! I'll message you at **{display_time}**. Talk then!"
+            f"Sounds good! I'll message you at **{display_time} {tz_display}**. Talk then!"
         )
 
         clear_onboarding_state(self.user_id)
-        await self.on_complete(personality, time, False)
+        await self.on_complete(personality, time, timezone, False)
 
 
 # ============================================
