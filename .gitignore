@@ -33,6 +33,9 @@ VISION-ARCHIVE.md
 ROADMAP.md
 DEPLOYMENT-NOTES.md
 DESIGN.md
+CLAUDE.md
+DEV-LOG.md
+docs/
 
 # Backup files
 src/bot_original.py
