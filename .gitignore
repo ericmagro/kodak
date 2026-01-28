@@ -39,3 +39,8 @@ docs/
 
 # Backup files
 src/bot_original.py
+
+# Local self-hosting files
+backup.sh
+backups/
+setup-temp/
