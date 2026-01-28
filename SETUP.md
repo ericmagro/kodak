@@ -1,9 +1,10 @@
 # Hosting Kodak
 
-Two options for running Kodak:
+Three options for running Kodak:
 
-1. **Railway (Recommended)** — Cloud hosting, always on, ~$5/month
-2. **Local** — Run on your own computer, completely free
+1. **Railway** — Cloud hosting, quick setup, ~$5/month
+2. **VPS Self-Hosting** — Full data privacy, automated backups, ~$5/month → [SELF-HOSTING.md](SELF-HOSTING.md)
+3. **Local** — Run on your own computer, completely free
 
 ---
 
