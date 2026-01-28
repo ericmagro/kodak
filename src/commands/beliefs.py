@@ -80,10 +80,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing belief map for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading your belief map. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading your belief map. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading your belief map. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="explore", description="Explore beliefs about a topic")
     @app_commands.describe(topic="The topic to explore (e.g., work, relationships, goals)")
@@ -146,10 +152,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error exploring topic {topic} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble exploring that topic. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble exploring that topic. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble exploring that topic. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="beliefs", description="List all your beliefs")
     async def beliefs_command(interaction: discord.Interaction):
@@ -188,10 +200,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error listing beliefs for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading your beliefs. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading your beliefs. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading your beliefs. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="belief", description="View a single belief in detail")
     @app_commands.describe(id="The belief ID (first 8 characters shown in other commands)")
@@ -237,10 +255,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing belief {id} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading that belief. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading that belief. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading that belief. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="forget", description="Delete a belief")
     @app_commands.describe(id="The belief ID to delete")
@@ -287,10 +311,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error deleting belief {id} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble deleting that belief. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble deleting that belief. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble deleting that belief. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="undo", description="Restore the last forgotten belief")
     async def undo_command(interaction: discord.Interaction):
@@ -318,10 +348,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error restoring belief for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble restoring a belief. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble restoring a belief. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble restoring a belief. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="confidence", description="Update your confidence in a belief")
     @app_commands.describe(
@@ -368,10 +404,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error updating confidence for belief {id} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble updating that belief. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble updating that belief. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble updating that belief. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="mark", description="Mark how important a belief is")
     @app_commands.describe(
@@ -415,10 +457,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error updating importance for belief {id} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble updating that belief. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble updating that belief. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble updating that belief. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="core", description="Show your most important beliefs")
     async def core_command(interaction: discord.Interaction):
@@ -472,10 +520,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing core beliefs for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading your core beliefs. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading your core beliefs. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading your core beliefs. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="history", description="See how a belief has evolved over time")
     @app_commands.describe(id="The belief ID")
@@ -533,10 +587,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing belief history {id} for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading that belief's history. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading that belief's history. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading that belief's history. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="changes", description="See beliefs that have evolved recently")
     async def changes_command(interaction: discord.Interaction):
@@ -585,10 +645,16 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing recent changes for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading recent changes. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading recent changes. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading recent changes. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="tensions", description="Show beliefs that might contradict each other")
     async def tensions_command(interaction: discord.Interaction):
@@ -632,7 +698,13 @@ async def register_beliefs_commands(bot):
 
         except Exception as e:
             logger.error(f"Error finding tensions for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble analyzing belief tensions. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble analyzing belief tensions. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble analyzing belief tensions. Try again in a moment.",
+                    ephemeral=True
+                )

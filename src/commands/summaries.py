@@ -118,7 +118,13 @@ async def register_summaries_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing summaries for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading your summaries. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading your summaries. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading your summaries. Try again in a moment.",
+                    ephemeral=True
+                )

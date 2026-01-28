@@ -195,10 +195,16 @@ async def register_themes_commands(bot):
 
         except Exception as e:
             logger.error(f"Error showing theme history for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble loading your theme history. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble loading your theme history. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble loading your theme history. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="values-history", description="See how themes shifted (same as /themes-history)")
     async def values_history_command(interaction: discord.Interaction):
@@ -249,10 +255,16 @@ async def register_themes_commands(bot):
 
         except Exception as e:
             logger.error(f"Error exporting themes for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble creating your export. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble creating your export. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble creating your export. Try again in a moment.",
+                    ephemeral=True
+                )
 
     @bot.tree.command(name="share-values", description="Export themes to share (same as /share-themes)")
     async def share_values_command(interaction: discord.Interaction):
@@ -332,7 +344,13 @@ async def register_themes_commands(bot):
 
         except Exception as e:
             logger.error(f"Error comparing themes for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble processing the comparison. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble processing the comparison. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble processing the comparison. Try again in a moment.",
+                    ephemeral=True
+                )

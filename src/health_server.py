@@ -1,4 +1,4 @@
-"""Health check HTTP server for Railway monitoring."""
+"""Health check HTTP server for UptimeRobot monitoring."""
 
 import asyncio
 import logging

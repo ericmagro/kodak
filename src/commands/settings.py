@@ -74,7 +74,13 @@ async def register_settings_commands(bot):
             )
         except Exception as e:
             logger.error(f"Error setting timezone for {user_id}: {e}")
-            await interaction.response.send_message(
-                "❌ I had trouble updating your timezone. Try again in a moment.",
-                ephemeral=True
-            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    "❌ I had trouble updating your timezone. Try again in a moment.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    "❌ I had trouble updating your timezone. Try again in a moment.",
+                    ephemeral=True
+                )

@@ -80,6 +80,7 @@ useradd -m -s /bin/bash kodak
 
 # Set up firewall
 ufw allow OpenSSH
+ufw allow 8080  # Health check endpoint for UptimeRobot
 ufw --force enable
 
 # Enable gocryptfs for all users
