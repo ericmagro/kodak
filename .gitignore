@@ -44,3 +44,4 @@ src/bot_original.py
 backup.sh
 backups/
 setup-temp/
+TODO-SOFT-CLOSE-TESTS.md

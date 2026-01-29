@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 
 from structured_logging import log_session_event, log_user_action, log_error_with_context
 
-from session import SessionState, SessionStage, create_session, end_session, get_active_session, determine_next_stage
+from session import (
+    SessionState, SessionStage, create_session, end_session,
+    get_active_session, determine_next_stage
+)
 from db import (
     get_or_create_user, update_user,
     create_session as db_create_session, end_session as db_end_session,
@@ -155,8 +158,14 @@ async def process_session_message(
     except Exception as e:
         logger.error(f"Belief extraction failed for user {user_id}: {e}")
 
-    # Determine next stage
-    next_stage = determine_next_stage(session)
+    # Determine next stage (pass message for signal detection)
+    next_stage = determine_next_stage(session, message_content)
+
+    # Track pre_close transitions for ceiling extension
+    if next_stage == SessionStage.PRE_CLOSE and session.stage != SessionStage.PRE_CLOSE:
+        session.pre_close_count += 1
+        logger.info(f"Entering PRE_CLOSE for user {user_id} (count: {session.pre_close_count})")
+
     session.stage = next_stage
 
     # Generate response using LLM (including for close - let it wrap up naturally)
@@ -166,9 +175,17 @@ async def process_session_message(
         logger.info(f"Sent response to user {user_id} in session {session.session_id}")
 
         # If closing, do the cleanup after sending the closing response
+        # BUT: safety check - if the bot asked a question, don't close yet!
+        # This prevents awkward endings where the bot asks something and then disappears
         if next_stage == SessionStage.CLOSE:
-            await close_session(channel, user, session, skip_message=True)
-            return
+            response_ends_with_question = bot_response.rstrip().endswith('?')
+            if response_ends_with_question:
+                # Bot didn't follow closing instructions - stay in session for one more exchange
+                session.stage = SessionStage.PROBE
+                logger.warning(f"Close response contained question, staying in session for user {user_id}")
+            else:
+                await close_session(channel, user, session, skip_message=True)
+                return
 
     except anthropic.APITimeoutError:
         logger.error("LLM request timed out during session response", exc_info=True)
@@ -195,6 +212,68 @@ async def process_session_message(
         await channel.send(random.choice(fallbacks))
 
 
+async def generate_soft_close_message(session: SessionState, last_user_message: str) -> str:
+    """
+    Generate a soft close message: LLM acknowledgment + templated question.
+
+    If LLM acknowledgment fails validation, use fallback.
+    """
+    from prompts import get_soft_close_question, get_fallback_acknowledgment, validate_acknowledgment
+
+    # Build prompt for acknowledgment only
+    ack_prompt = """Generate a brief acknowledgment (ONE sentence, under 15 words) of what the user shared in this conversation.
+
+Rules:
+- Reference what they talked about, not how they feel
+- NO questions
+- NO evaluations (don't say "great", "hard", "interesting", "important", etc.)
+- NO advice
+- Just a simple, factual acknowledgment of the topics discussed
+
+Examples of good acknowledgments:
+- "Work's been demanding lately."
+- "A lot going on with the move."
+- "Piano and productivity both on your mind."
+- "The meeting dynamics and energy management."
+
+Examples of bad acknowledgments (DO NOT do these):
+- "It sounds like you're really stressed." (evaluative)
+- "That must be hard." (evaluative)
+- "That's really interesting." (evaluative)
+- "Have you tried X?" (advice)
+- "What do you think about that?" (question)"""
+
+    # Get recent context
+    recent_messages = session.get_recent_context(4)
+    api_messages = [{"role": m["role"], "content": m["content"]} for m in recent_messages]
+
+    try:
+        acknowledgment = await create_message_async(
+            messages=api_messages,
+            system=ack_prompt,
+            max_tokens=50
+        )
+
+        # Validate
+        if not validate_acknowledgment(acknowledgment):
+            logger.warning(f"Soft close acknowledgment failed validation: {acknowledgment[:50]}...")
+            acknowledgment = get_fallback_acknowledgment(session.personality)
+
+    except Exception as e:
+        logger.error(f"Error generating soft close acknowledgment: {e}")
+        acknowledgment = get_fallback_acknowledgment(session.personality)
+
+    # Append templated question
+    question = get_soft_close_question(session.personality)
+
+    full_message = f"{acknowledgment} {question}"
+
+    # Store bot's response in session
+    session.add_bot_message(full_message)
+
+    return full_message
+
+
 async def generate_session_response(session: SessionState, user_message: str, fallback: bool = False) -> str:
     """Generate a contextual response using the LLM."""
     if fallback:
@@ -206,6 +285,10 @@ async def generate_session_response(session: SessionState, user_message: str, fa
             "Say more about that.",
         ]
         return random.choice(fallbacks)
+
+    # Special handling for PRE_CLOSE - use hybrid approach
+    if session.stage == SessionStage.PRE_CLOSE:
+        return await generate_soft_close_message(session, user_message)
 
     # Build system prompt
     system_prompt = build_session_system_prompt(
@@ -222,7 +305,8 @@ async def generate_session_response(session: SessionState, user_message: str, fa
         SessionStage.ANCHOR: "Help them focus on one specific thing. Ask them to elaborate on the most interesting part.",
         SessionStage.PROBE: "Go deeper. Ask why this matters or what makes it significant.",
         SessionStage.CONNECT: "Help them connect this to broader patterns or values.",
-        SessionStage.CLOSE: "Time to wrap up. Briefly acknowledge what they just said, then close warmly. Keep it short (1-2 sentences). Say goodbye and that you'll talk tomorrow."
+        SessionStage.PRE_CLOSE: "Session winding down. Handled separately.",  # Routed to generate_soft_close_message
+        SessionStage.CLOSE: "This is the FINAL message. DO NOT ask any questions. Brief warm goodbye only. 1-2 sentences max. Say goodnight or talk tomorrow."
     }
 
     instruction = stage_instructions.get(session.stage, "Continue the conversation naturally.")

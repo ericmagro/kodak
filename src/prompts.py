@@ -365,3 +365,73 @@ def should_probe_more(
 
     # Long: follow their energy
     return exchange_count < max_ex
+
+
+# ============================================
+# SOFT CLOSE (PRE_CLOSE STAGE)
+# ============================================
+
+# Templated questions for soft close (single question, not compound)
+SOFT_CLOSE_QUESTIONS = {
+    "philosopher": "Anything else sitting with you tonight?",
+    "best_friend": "Anything else on your mind tonight?",
+    "scientist": "Any other observations to log?",
+    "trickster": "Anything else, or should I let you go touch grass?",
+    "therapist": "Is there anything else you'd like to share tonight?",
+}
+
+# Fallback acknowledgments if LLM validation fails
+FALLBACK_ACKNOWLEDGMENTS = {
+    "philosopher": ["That's a lot to sit with.", "Worth reflecting on.", "Some threads to follow."],
+    "best_friend": ["That's real.", "I hear you.", "That's a lot.", "Got it."],
+    "scientist": ["Noted.", "Good data point.", "Logged.", "Recorded."],
+    "trickster": ["Fair.", "That tracks.", "Solid.", "Checks out."],
+    "therapist": ["Thank you for sharing that.", "I appreciate you sharing.", "That took trust to share."],
+}
+
+
+def get_soft_close_question(personality: str) -> str:
+    """Get the templated soft close question for a personality."""
+    return SOFT_CLOSE_QUESTIONS.get(personality, SOFT_CLOSE_QUESTIONS["best_friend"])
+
+
+def get_fallback_acknowledgment(personality: str) -> str:
+    """Get a fallback acknowledgment for a personality."""
+    acks = FALLBACK_ACKNOWLEDGMENTS.get(personality, FALLBACK_ACKNOWLEDGMENTS["best_friend"])
+    return random.choice(acks)
+
+
+def validate_acknowledgment(text: str) -> bool:
+    """
+    Validate that an LLM-generated acknowledgment follows constraints.
+
+    Returns True if valid, False if should use fallback.
+    """
+    # Must be short (roughly 1 sentence, under 100 chars)
+    if len(text) > 100:
+        return False
+
+    # No questions
+    if '?' in text:
+        return False
+
+    text_lower = text.lower()
+
+    # No evaluative language
+    evaluative_words = [
+        'great', 'amazing', 'wonderful', 'terrible', 'hard', 'difficult',
+        'important', 'interesting', 'exciting', 'tough', 'rough',
+        'sounds like you', 'seems like you', 'you seem', 'you sound',
+        'struggling', 'stressed', 'overwhelmed', 'proud', 'happy', 'sad'
+    ]
+    for word in evaluative_words:
+        if word in text_lower:
+            return False
+
+    # No advice
+    advice_patterns = ['you should', 'you could', 'try to', 'maybe you', 'have you considered']
+    for pattern in advice_patterns:
+        if pattern in text_lower:
+            return False
+
+    return True

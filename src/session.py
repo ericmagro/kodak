@@ -18,6 +18,7 @@ class SessionStage(Enum):
     ANCHOR = "anchor"
     PROBE = "probe"
     CONNECT = "connect"
+    PRE_CLOSE = "pre_close"  # Soft close - asks "anything else?"
     CLOSE = "close"
     ENDED = "ended"
 
@@ -43,6 +44,7 @@ class SessionState:
     last_response_depth: str = "medium"  # minimal/short/medium/long
     theme_identified: Optional[str] = None
     pattern_surfaced_this_session: bool = False
+    pre_close_count: int = 0  # How many times we've soft-closed (for ceiling extension)
 
     # Extracted beliefs (to show at close)
     # Each entry: {'statement': str, 'themes': list[str]}
@@ -153,33 +155,118 @@ def cleanup_expired_sessions() -> int:
 # SESSION FLOW LOGIC
 # ============================================
 
-def determine_next_stage(session: SessionState) -> SessionStage:
+def has_continuation_signal(message: str) -> bool:
+    """Detect if user's message signals they want to continue."""
+    message_lower = message.lower()
+
+    # Explicit continuation phrases
+    continuation_phrases = [
+        "also", "another thing", "one more", "actually",
+        "oh and", "speaking of", "that reminds me",
+        "i wanted to mention", "i forgot to say"
+    ]
+
+    for phrase in continuation_phrases:
+        if phrase in message_lower:
+            return True
+
+    # Message ends with a question (user asking bot something)
+    if message.rstrip().endswith('?'):
+        return True
+
+    return False
+
+
+def has_early_close_signal(message: str) -> bool:
+    """Detect if user's message signals they want to end the session."""
+    message_lower = message.lower().strip()
+
+    # Explicit close phrases
+    close_phrases = [
+        "let's wrap", "lets wrap", "that's all", "thats all",
+        "i'm done", "im done", "i'm tired", "im tired",
+        "gotta go", "need to sleep", "good night", "goodnight",
+        "heading to bed", "going to bed", "that's it", "thats it",
+        "i'm good", "im good", "call it a night"
+    ]
+
+    for phrase in close_phrases:
+        if phrase in message_lower:
+            return True
+
+    return False
+
+
+def get_ceiling(session: SessionState) -> int:
+    """Get the soft ceiling for session length, accounting for extensions."""
+    base_ceiling = {'quick': 3, 'standard': 6, 'deep': 10}.get(session.depth_setting, 6)
+
+    if session.is_first_session:
+        base_ceiling = min(base_ceiling, 4)
+
+    # Each pre_close that was continued adds 3 exchanges
+    extension = session.pre_close_count * 3
+
+    return min(base_ceiling + extension, 15)  # Hard max 15
+
+
+def should_trigger_close(session: SessionState, last_message: str = "") -> bool:
+    """Check if we should start closing the session."""
+    # Hard ceiling - always close at 15 regardless
+    if session.exchange_count >= 15:
+        return True
+
+    # Early close signal from user
+    if last_message and has_early_close_signal(last_message):
+        return True
+
+    # Soft ceiling based on depth setting
+    ceiling = get_ceiling(session)
+    if session.exchange_count >= ceiling:
+        return True
+
+    # Early close for disengaged users
+    if session.last_response_depth == 'minimal' and session.exchange_count >= 2:
+        return True
+    if session.last_response_depth == 'short' and session.exchange_count >= 3:
+        return True
+
+    return False
+
+
+def determine_next_stage(session: SessionState, last_message: str = "") -> SessionStage:
     """
     Determine what stage to move to based on session state.
 
-    This implements the adaptive depth logic from the design doc.
+    This implements the adaptive depth logic with soft close support.
     """
     current = session.stage
     depth = session.last_response_depth
     exchanges = session.exchange_count
-    setting = session.depth_setting
     is_first = session.is_first_session
 
-    # Depth ceilings
-    max_exchanges = {
-        'quick': 3,
-        'standard': 6,
-        'deep': 10
-    }
-    ceiling = max_exchanges.get(setting, 6)
-
-    # First session: max 4 exchanges
-    if is_first:
-        ceiling = min(ceiling, 4)
-
-    # Already at or past ceiling
-    if exchanges >= ceiling:
+    # Hard ceiling - force close at 15 regardless
+    if exchanges >= 15:
         return SessionStage.CLOSE
+
+    # Check if we should be closing (soft or hard)
+    if should_trigger_close(session, last_message):
+        # If we're already in PRE_CLOSE, decide based on user response
+        if current == SessionStage.PRE_CLOSE:
+            # Continuation signal takes precedence (user explicitly wants to continue)
+            if has_continuation_signal(last_message):
+                return SessionStage.PROBE
+            # Early close signal (user explicitly wants to stop)
+            if has_early_close_signal(last_message):
+                return SessionStage.CLOSE
+            # Fall back to depth-based behavior
+            if depth in ('medium', 'long'):
+                return SessionStage.PROBE
+            # Short/minimal response → close
+            return SessionStage.CLOSE
+        else:
+            # First time hitting close threshold → soft close first
+            return SessionStage.PRE_CLOSE
 
     # Stage transitions based on current stage and response depth
     if current == SessionStage.OPENER:
@@ -191,15 +278,8 @@ def determine_next_stage(session: SessionState) -> SessionStage:
         return SessionStage.PROBE
 
     if current == SessionStage.PROBE:
-        # Minimal response: one follow-up then close
-        if depth == 'minimal' and exchanges >= 2:
-            return SessionStage.CLOSE
-
-        # Short response: fewer probes
-        if depth == 'short' and exchanges >= 3:
-            return SessionStage.CLOSE
-
         # Check if we should connect (long engagement, not first session)
+        ceiling = get_ceiling(session)
         if depth == 'long' and exchanges >= 4 and not is_first and not session.pattern_surfaced_this_session:
             return SessionStage.CONNECT
 
@@ -207,16 +287,18 @@ def determine_next_stage(session: SessionState) -> SessionStage:
         if exchanges < ceiling:
             return SessionStage.PROBE
 
-        return SessionStage.CLOSE
+        # At ceiling, trigger soft close
+        return SessionStage.PRE_CLOSE
 
     if current == SessionStage.CONNECT:
         # After connecting, one more probe or close
+        ceiling = get_ceiling(session)
         if exchanges < ceiling:
             return SessionStage.PROBE
-        return SessionStage.CLOSE
+        return SessionStage.PRE_CLOSE
 
-    # Default to close
-    return SessionStage.CLOSE
+    # Default to pre_close (safer than hard close)
+    return SessionStage.PRE_CLOSE
 
 
 def should_offer_depth_check(session: SessionState) -> bool:
@@ -294,8 +376,11 @@ def get_stage_instruction(session: SessionState) -> str:
     if stage == SessionStage.CONNECT:
         return "They're engaged. If you notice a pattern or connection to previous themes, gently surface it as a curiosity."
 
+    if stage == SessionStage.PRE_CLOSE:
+        return "Session is winding down. Acknowledge what they shared briefly, then ask if there's anything else."
+
     if stage == SessionStage.CLOSE:
-        return "Time to close. Summarize what emerged briefly, thank them, and say goodbye."
+        return "This is the FINAL message. DO NOT ask any questions. Brief warm goodbye only. 1-2 sentences max."
 
     return ""
 
