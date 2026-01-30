@@ -41,6 +41,7 @@ class SessionState:
 
     # Track what we've shown/done
     opener_used: Optional[str] = None
+    last_soft_close_question: Optional[str] = None  # Avoid repeating soft close phrases
     last_response_depth: str = "medium"  # minimal/short/medium/long
     theme_identified: Optional[str] = None
     pattern_surfaced_this_session: bool = False

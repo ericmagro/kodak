@@ -371,13 +371,43 @@ def should_probe_more(
 # SOFT CLOSE (PRE_CLOSE STAGE)
 # ============================================
 
-# Templated questions for soft close (single question, not compound)
-SOFT_CLOSE_QUESTIONS = {
-    "philosopher": "Anything else sitting with you tonight?",
-    "best_friend": "Anything else on your mind tonight?",
-    "scientist": "Any other observations to log?",
-    "trickster": "Anything else, or should I let you go touch grass?",
-    "therapist": "Is there anything else you'd like to share tonight?",
+# Pool of soft close questions (5-7 per personality, like OPENER_POOLS)
+SOFT_CLOSE_QUESTION_POOLS = {
+    "philosopher": [
+        "Anything else sitting with you tonight?",
+        "Any other threads worth pulling?",
+        "Anything else you want to sit with?",
+        "Is there more here, or is that the shape of it?",
+        "Anything else on your mind?",
+    ],
+    "best_friend": [
+        "Anything else on your mind?",
+        "That it, or is there more?",
+        "Anything else you wanna get out?",
+        "We good, or is there more?",
+        "Anything else before I let you go?",
+    ],
+    "scientist": [
+        "Any other observations to log?",
+        "Anything else worth recording?",
+        "Any other data points?",
+        "That complete the picture, or is there more?",
+        "Anything else for the record?",
+    ],
+    "trickster": [
+        "That it, or is there more chaos to unpack?",
+        "Anything else, or are we good?",
+        "Got more, or should I let you escape?",
+        "Anything else on the agenda?",
+        "That's a wrap, or you holding out on me?",
+    ],
+    "therapist": [
+        "Is there anything else you'd like to share?",
+        "Anything else coming up for you?",
+        "Is there more you want to explore, or does this feel complete?",
+        "Anything else you'd like to put words to?",
+        "Is there anything else present for you tonight?",
+    ],
 }
 
 # Fallback acknowledgments if LLM validation fails
@@ -390,9 +420,21 @@ FALLBACK_ACKNOWLEDGMENTS = {
 }
 
 
-def get_soft_close_question(personality: str) -> str:
-    """Get the templated soft close question for a personality."""
-    return SOFT_CLOSE_QUESTIONS.get(personality, SOFT_CLOSE_QUESTIONS["best_friend"])
+def get_soft_close_question(personality: str, last_question: str = None) -> str:
+    """Get a soft close question for a personality, avoiding the last one used.
+
+    Args:
+        personality: The personality preset key
+        last_question: The last question used, to avoid repetition
+    """
+    pool = SOFT_CLOSE_QUESTION_POOLS.get(personality, SOFT_CLOSE_QUESTION_POOLS["best_friend"])
+
+    # Filter out last used question
+    available = [q for q in pool if q != last_question] if last_question else pool
+    if not available:
+        available = pool
+
+    return random.choice(available)
 
 
 def get_fallback_acknowledgment(personality: str) -> str:

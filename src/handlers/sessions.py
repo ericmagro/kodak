@@ -263,8 +263,9 @@ Examples of bad acknowledgments (DO NOT do these):
         logger.error(f"Error generating soft close acknowledgment: {e}")
         acknowledgment = get_fallback_acknowledgment(session.personality)
 
-    # Append templated question
-    question = get_soft_close_question(session.personality)
+    # Append templated question (avoid repeating last one)
+    question = get_soft_close_question(session.personality, session.last_soft_close_question)
+    session.last_soft_close_question = question
 
     full_message = f"{acknowledgment} {question}"
 

@@ -114,7 +114,43 @@ class TestGetSoftCloseQuestion:
             assert "?" in question  # Should be a question
 
     def test_unknown_personality_falls_back_to_best_friend(self):
-        assert get_soft_close_question("unknown") == get_soft_close_question("best_friend")
+        from prompts import SOFT_CLOSE_QUESTION_POOLS
+        # Unknown should return from best_friend pool
+        question = get_soft_close_question("unknown")
+        assert question in SOFT_CLOSE_QUESTION_POOLS["best_friend"]
+
+    def test_avoids_last_question(self):
+        """When last_question is provided, it should not be returned."""
+        from prompts import SOFT_CLOSE_QUESTION_POOLS
+        pool = SOFT_CLOSE_QUESTION_POOLS["trickster"]
+        last_q = pool[0]
+
+        # Call multiple times - should never return the last question
+        for _ in range(20):
+            question = get_soft_close_question("trickster", last_question=last_q)
+            assert question != last_q
+            assert question in pool
+
+    def test_avoids_last_question_all_personalities(self):
+        """Avoidance should work for all personalities, not just trickster."""
+        from prompts import SOFT_CLOSE_QUESTION_POOLS
+        for personality, pool in SOFT_CLOSE_QUESTION_POOLS.items():
+            last_q = pool[0]
+            for _ in range(20):
+                question = get_soft_close_question(personality, last_question=last_q)
+                assert question != last_q, f"{personality} returned excluded question"
+
+    def test_handles_last_question_not_in_pool(self):
+        """If last_question isn't in the pool (e.g., personality changed), should still work."""
+        from prompts import SOFT_CLOSE_QUESTION_POOLS
+        question = get_soft_close_question("philosopher", last_question="This is not a real question?")
+        assert question in SOFT_CLOSE_QUESTION_POOLS["philosopher"]
+
+    def test_variety_in_pool(self):
+        """Each personality should have multiple options."""
+        from prompts import SOFT_CLOSE_QUESTION_POOLS
+        for personality, pool in SOFT_CLOSE_QUESTION_POOLS.items():
+            assert len(pool) >= 4, f"{personality} should have at least 4 soft close options"
 
 
 # ============================================
