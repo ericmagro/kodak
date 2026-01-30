@@ -257,11 +257,6 @@ async def register_themes_commands(bot):
                     ephemeral=True
                 )
 
-    @bot.tree.command(name="values-history", description="See how themes shifted (same as /themes-history)")
-    async def values_history_command(interaction: discord.Interaction):
-        """Alias for themes-history command."""
-        await themes_history_command(interaction)
-
     @bot.tree.command(name="share-themes", description="Export your themes to share with someone")
     async def share_themes_command(interaction: discord.Interaction):
         """Export themes as a shareable file."""
@@ -316,11 +311,6 @@ async def register_themes_commands(bot):
                     "❌ I had trouble creating your export. Try again in a moment.",
                     ephemeral=True
                 )
-
-    @bot.tree.command(name="share-values", description="Export themes to share (same as /share-themes)")
-    async def share_values_command(interaction: discord.Interaction):
-        """Alias for share-themes command."""
-        await share_themes_command(interaction)
 
     @bot.tree.command(name="compare-file", description="Compare your themes with someone's shared file")
     async def compare_file_command(interaction: discord.Interaction, file: discord.Attachment):
@@ -467,8 +457,3 @@ async def register_themes_commands(bot):
                 "❌ I had trouble creating your profile. Try again in a moment.",
                 ephemeral=True
             )
-
-    @bot.tree.command(name="share-me", description="Generate a shareable profile (same as /share-profile)")
-    async def share_me_command(interaction: discord.Interaction):
-        """Alias for share-profile command."""
-        await share_profile_command(interaction)
