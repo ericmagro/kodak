@@ -35,9 +35,9 @@ Deployed 2026-01-30. Core functionality works but UX issues found.
 
 ## Next Steps
 
-1. Debug the alias issue - check if other aliases work
-2. Decide on UX improvement approach
-3. Implement fix
+1. ~~Debug the alias issue - check if other aliases work~~ DONE - removed broken aliases
+2. ~~Decide on UX improvement approach~~ DONE - going with Option E (preview + file)
+3. Implement fix - add preview to /share-profile message
 4. Re-deploy and test
 
 ## Context
