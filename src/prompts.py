@@ -378,13 +378,13 @@ SOFT_CLOSE_QUESTION_POOLS = {
         "Any other threads worth pulling?",
         "Anything else you want to sit with?",
         "Is there more here, or is that the shape of it?",
-        "Anything else on your mind?",
+        "Any questions still forming?",
     ],
     "best_friend": [
-        "Anything else on your mind?",
+        "Alright, anything else you need to get off your chest?",
         "That it, or is there more?",
         "Anything else you wanna get out?",
-        "We good, or is there more?",
+        "That everything, or is there more?",
         "Anything else before I let you go?",
     ],
     "scientist": [
@@ -395,11 +395,11 @@ SOFT_CLOSE_QUESTION_POOLS = {
         "Anything else for the record?",
     ],
     "trickster": [
-        "That it, or is there more chaos to unpack?",
-        "Anything else, or are we good?",
-        "Got more, or should I let you escape?",
-        "Anything else on the agenda?",
-        "That's a wrap, or you holding out on me?",
+        "Cool. That the whole episode, or is there a post-credits scene?",
+        "Alright. Anything else rattling around in there?",
+        "That's good chaos for one day. Anything else before you go?",
+        "Should I let you go be a person now, or is there more?",
+        "Plot points logged. Anything else for the record?",
     ],
     "therapist": [
         "Is there anything else you'd like to share?",
