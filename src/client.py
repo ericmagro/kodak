@@ -14,7 +14,7 @@ logger = logging.getLogger('kodak')
 DEFAULT_TIMEOUT = 30.0
 
 # Default model
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # Singleton clients
 _sync_client: Optional[anthropic.Anthropic] = None
