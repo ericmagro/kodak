@@ -1,6 +1,5 @@
 """Database operations for Kodak v2."""
 
-import os
 import json
 import logging
 import aiosqlite
@@ -28,9 +27,7 @@ ALLOWED_SESSION_COLUMNS = {
     'session_stage', 'ended_at', 'message_count', 'beliefs_extracted', 'opener_used'
 }
 
-# Database path configuration
-_default_db_path = Path(__file__).parent.parent / "kodak.db"
-DB_PATH = Path(os.getenv("KODAK_DB_PATH", str(_default_db_path)))
+from config import DB_PATH
 SCHEMA_PATH = Path(__file__).parent.parent / "schema.sql"
 
 

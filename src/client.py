@@ -8,13 +8,9 @@ import logging
 import anthropic
 from typing import Optional
 
+from config import MODEL as DEFAULT_MODEL, LLM_TIMEOUT as DEFAULT_TIMEOUT
+
 logger = logging.getLogger('kodak')
-
-# Default timeout for all LLM calls (seconds)
-DEFAULT_TIMEOUT = 30.0
-
-# Default model
-DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # Singleton clients
 _sync_client: Optional[anthropic.Anthropic] = None

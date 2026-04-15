@@ -1,11 +1,9 @@
 """Kodak v2.0 - Reflective Journaling Companion (Refactored)."""
 
-import os
 import logging
 import asyncio
 import discord
 from discord.ext import commands
-from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
 # Database and core imports
@@ -36,16 +34,12 @@ from scheduler import JournalScheduler
 # Health server
 from health_server import start_health_server
 
-# Load environment
-load_dotenv()
-
 # Logging setup
 from structured_logging import setup_structured_logging, log_user_action, log_session_event, log_error_with_context
 
 # Use JSON logging in production, human-readable in development
-enable_json = os.getenv('KODAK_JSON_LOGS', 'false').lower() == 'true'
-log_level = os.getenv('KODAK_LOG_LEVEL', 'INFO')
-logger = setup_structured_logging(level=log_level, enable_json=enable_json)
+from config import JSON_LOGS, LOG_LEVEL, HEALTH_PORT, DISCORD_TOKEN
+logger = setup_structured_logging(level=LOG_LEVEL, enable_json=JSON_LOGS)
 
 # Bot setup
 intents = discord.Intents.default()
@@ -67,8 +61,7 @@ async def on_ready():
 
     try:
         # Start health check server
-        port = int(os.getenv('PORT', '8080'))
-        health_server = await start_health_server(port)
+        health_server = await start_health_server(HEALTH_PORT)
 
         # Initialize database
         await init_db()
@@ -213,7 +206,7 @@ async def send_reengagement_prompt(user: dict):
 
 async def main():
     """Main entry point."""
-    token = os.getenv('DISCORD_TOKEN')
+    token = DISCORD_TOKEN
     if not token:
         logger.error("DISCORD_TOKEN not found in environment variables")
         return
